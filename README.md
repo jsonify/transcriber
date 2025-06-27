@@ -10,6 +10,7 @@ A modern MacOS speech recognition CLI tool for transcribing audio files using Ap
 - **📁 Batch Processing**: Process multiple audio files at once with summary
 - **🔒 Privacy-First**: On-device recognition option for sensitive content
 - **🌍 Multi-Language Support**: 50+ languages with on-device capability indicators
+- **⚙️ Configuration Files**: Save default settings in YAML or JSON config files
 - **⚡ Modern Swift Architecture**: Built with async/await and SwiftArgumentParser
 
 ## Installation
@@ -80,6 +81,69 @@ transcriber spanish_audio.wav --language es-ES
 transcriber audio.wav --language en-US --on-device
 ```
 
+## Configuration Files
+
+Save time by creating configuration files with your preferred settings instead of passing the same arguments repeatedly.
+
+### Supported Configuration Files
+
+The transcriber automatically searches for configuration files in this order:
+1. Custom config file (specified with `--config`)
+2. Project root: `./.transcriber.yaml` or `./.transcriber.json`
+3. Home directory: `~/.transcriber.yaml` or `~/.transcriber.json`
+
+### Generate Sample Configuration
+
+```bash
+# Generate a sample configuration file
+transcriber --generate-config
+
+# Generate config in specific format and location
+transcriber --generate-config --format yaml --output ~/.transcriber.yaml
+```
+
+### Configuration Examples
+
+**YAML format (.transcriber.yaml):**
+```yaml
+# Default transcription settings
+language: "en-US"
+format: "txt"
+onDevice: false
+outputDir: "./transcripts"
+verbose: false
+showProgress: true
+noColor: false
+```
+
+**JSON format (.transcriber.json):**
+```json
+{
+  "language": "en-US",
+  "format": "json",
+  "onDevice": true,
+  "outputDir": "./results",
+  "verbose": true,
+  "showProgress": true,
+  "noColor": false
+}
+```
+
+### Usage with Configuration
+
+```bash
+# Use default config file
+transcriber audio.wav
+
+# Override config with CLI arguments
+transcriber audio.wav --format srt --language es-ES
+
+# Use custom config file
+transcriber audio.wav --config my-config.yaml
+```
+
+**Note:** Command-line arguments always override configuration file settings.
+
 ## Command Line Options
 
 | Option | Description |
@@ -92,6 +156,8 @@ transcriber audio.wav --language en-US --on-device
 | `--verbose`, `-v` | Show detailed output with file info and stats |
 | `--show-progress` | Display animated progress bars |
 | `--no-color` | Disable colors and progress bars |
+| `--config` | Path to custom configuration file |
+| `--generate-config` | Generate sample configuration file |
 | `--list-languages` | List all supported languages with capability indicators |
 | `--help` | Show help information |
 | `--version` | Show version |
