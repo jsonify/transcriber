@@ -97,7 +97,7 @@ struct TranscriberCommand: AsyncParsableCommand {
     var inputFiles: [String] = []
     
     @Option(name: .shortAndLong, help: "Output format (txt, json, srt, vtt)")
-    var format: String = "txt"
+    var format: String?
     
     @Option(name: .shortAndLong, help: "Output file path (optional)")
     var output: String?
@@ -106,7 +106,7 @@ struct TranscriberCommand: AsyncParsableCommand {
     var outputDir: String?
     
     @Option(name: .shortAndLong, help: "Language code (e.g., en-US, es-ES)")
-    var language: String = "en-US"
+    var language: String?
     
     @Flag(name: .long, help: "Use on-device recognition (more private, limited languages)")
     var onDevice: Bool = false
@@ -123,8 +123,34 @@ struct TranscriberCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Disable colored output and progress bars")
     var noColor: Bool = false
     
+    @Option(name: .long, help: "Path to custom configuration file")
+    var config: String?
+    
+    @Flag(name: .long, help: "Generate sample configuration file")
+    var generateConfig: Bool = false
+    
     func run() async throws {
         let transcriber = await SpeechTranscriber()
+        
+        // Handle generate-config command first
+        if generateConfig {
+            try handleGenerateConfig()
+            return
+        }
+        
+        // Load configuration and merge with CLI arguments
+        let configManager = ConfigurationManager()
+        let loadedConfig = configManager.loadConfiguration(customConfigPath: config)
+        let finalConfig = mergeConfiguration(loadedConfig)
+        
+        // Validate configuration
+        let validationErrors = configManager.validateConfiguration(loadedConfig)
+        if !validationErrors.isEmpty {
+            for error in validationErrors {
+                showError("Configuration Error", details: error)
+            }
+            throw ExitCode.failure
+        }
         
         // Handle special commands first
         if listLanguages {
@@ -146,26 +172,26 @@ struct TranscriberCommand: AsyncParsableCommand {
             throw ExitCode.failure
         }
         
-        guard let outputFormat = OutputFormat(rawValue: format) else {
-            showError("Unsupported format '\(format)'", 
+        guard let outputFormat = OutputFormat(rawValue: finalConfig.format ?? "txt") else {
+            showError("Unsupported format '\(finalConfig.format ?? "txt")'", 
                      details: "Supported formats: \(OutputFormat.allCases.map(\.rawValue).joined(separator: ", "))")
             throw ExitCode.failure
         }
         
         // Show beautiful header
-        if !noColor {
+        if !(finalConfig.noColor ?? false) {
             showHeader()
             showConfiguration(
-                language: language,
-                format: format,
-                onDevice: onDevice,
+                language: finalConfig.language ?? "en-US",
+                format: finalConfig.format ?? "txt",
+                onDevice: finalConfig.onDevice ?? false,
                 fileCount: inputFiles.count
             )
         }
         
         // Set up progress callback
         await transcriber.setProgressCallback { progress, message in
-            if showProgress || !noColor {
+            if (finalConfig.showProgress ?? false) || !(finalConfig.noColor ?? false) {
                 displayProgress(progress, message: message)
             }
         }
@@ -181,7 +207,7 @@ struct TranscriberCommand: AsyncParsableCommand {
             // Check file existence
             guard FileManager.default.fileExists(atPath: fileURL.path) else {
                 showError("File not found: \(inputFile)")
-                if verbose {
+                if finalConfig.verbose ?? false {
                     print("   📁 Checked: \u{001B}[2m\(fileURL.path)\u{001B}[0m")
                     print("   📂 Working dir: \u{001B}[2m\(FileManager.default.currentDirectoryPath)\u{001B}[0m")
                 }
@@ -193,7 +219,7 @@ struct TranscriberCommand: AsyncParsableCommand {
             print("\(fileIcon) \u{001B}[1mProcessing [\(index + 1)/\(inputFiles.count)]\u{001B}[0m \u{001B}[2m\(fileURL.lastPathComponent)\u{001B}[0m")
             
             // Show file info if verbose
-            if verbose {
+            if finalConfig.verbose ?? false {
                 let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int64) ?? 0
                 let formatter = ByteCountFormatter()
                 formatter.allowedUnits = [.useKB, .useMB, .useGB]
@@ -203,7 +229,7 @@ struct TranscriberCommand: AsyncParsableCommand {
             
             do {
                 // Start progress
-                if showProgress || !noColor {
+                if (finalConfig.showProgress ?? false) || !(finalConfig.noColor ?? false) {
                     print("   \u{001B}[2mStarting transcription...\u{001B}[0m")
                     displayProgress(0.0, message: "Initializing...")
                 }
@@ -211,19 +237,19 @@ struct TranscriberCommand: AsyncParsableCommand {
                 // Perform transcription
                 let result = try await transcriber.transcribeAudioFile(
                     at: fileURL,
-                    language: language,
-                    onDevice: onDevice
+                    language: finalConfig.language ?? "en-US",
+                    onDevice: finalConfig.onDevice ?? false
                 )
                 
                 // Finish progress
-                if showProgress || !noColor {
+                if (finalConfig.showProgress ?? false) || !(finalConfig.noColor ?? false) {
                     displayProgress(1.0, message: "Complete!")
                     finishProgress()
                 }
                 
                 // Format output
                 let formattedOutput = OutputFormatter.format(result, as: outputFormat)
-                let outputPath = determineOutputPath(for: inputFile, format: outputFormat)
+                let outputPath = determineOutputPath(for: inputFile, format: outputFormat, config: finalConfig)
                 
                 // Save or display result
                 if let outputPath = outputPath {
@@ -232,7 +258,7 @@ struct TranscriberCommand: AsyncParsableCommand {
                 
                 // Show results
                 showSuccess("Transcription Complete")
-                if verbose {
+                if finalConfig.verbose ?? false {
                     let formatDuration = { (seconds: TimeInterval) -> String in
                         let minutes = Int(seconds) / 60
                         let remainingSeconds = Int(seconds) % 60
@@ -259,7 +285,7 @@ struct TranscriberCommand: AsyncParsableCommand {
                 successCount += 1
                 
             } catch {
-                if showProgress || !noColor {
+                if (finalConfig.showProgress ?? false) || !(finalConfig.noColor ?? false) {
                     finishProgress()
                 }
                 
@@ -280,7 +306,7 @@ struct TranscriberCommand: AsyncParsableCommand {
         }
     }
     
-    private func determineOutputPath(for inputFile: String, format: OutputFormat) -> String? {
+    private func determineOutputPath(for inputFile: String, format: OutputFormat, config: TranscriberConfiguration) -> String? {
         if let explicitOutput = output {
             return explicitOutput
         }
@@ -288,7 +314,7 @@ struct TranscriberCommand: AsyncParsableCommand {
         let inputURL = URL(fileURLWithPath: inputFile)
         let baseName = inputURL.deletingPathExtension().lastPathComponent
         
-        if let outputDirectory = outputDir {
+        if let outputDirectory = config.outputDir {
             let outputURL = URL(fileURLWithPath: outputDirectory)
                 .appendingPathComponent("\(baseName).\(format.fileExtension)")
             
@@ -307,5 +333,44 @@ struct TranscriberCommand: AsyncParsableCommand {
         let outputURL = inputURL.deletingPathExtension()
             .appendingPathExtension(format.fileExtension)
         return outputURL.path
+    }
+    
+    private func handleGenerateConfig() throws {
+        print("🔧 \u{001B}[1mGenerating sample configuration files\u{001B}[0m")
+        print()
+        
+        let configManager = ConfigurationManager()
+        
+        // Generate YAML config
+        let yamlPath = ".transcriber.yaml"
+        try configManager.generateSampleConfiguration(format: "yaml", at: yamlPath)
+        showSuccess("Generated YAML configuration: \(yamlPath)")
+        
+        // Generate JSON config
+        let jsonPath = ".transcriber.json"
+        try configManager.generateSampleConfiguration(format: "json", at: jsonPath)
+        showSuccess("Generated JSON configuration: \(jsonPath)")
+        
+        print()
+        print("📝 \u{001B}[1mUsage:\u{001B}[0m")
+        print("   • Edit either file to set your default preferences")
+        print("   • Configuration files are searched in this order:")
+        print("     1. Custom config file (--config flag)")
+        print("     2. Home directory (~/.transcriber.yaml or ~/.transcriber.json)")
+        print("     3. Project root (./.transcriber.yaml or ./.transcriber.json)")
+        print("   • Command-line arguments override config file settings")
+        print()
+    }
+    
+    private func mergeConfiguration(_ configFile: TranscriberConfiguration) -> TranscriberConfiguration {
+        return TranscriberConfiguration(
+            language: language ?? configFile.language,
+            format: format ?? configFile.format,
+            onDevice: onDevice || (configFile.onDevice ?? false),
+            outputDir: outputDir ?? configFile.outputDir,
+            verbose: verbose || (configFile.verbose ?? false),
+            showProgress: showProgress || (configFile.showProgress ?? false),
+            noColor: noColor || (configFile.noColor ?? false)
+        )
     }
 }
