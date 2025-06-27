@@ -22,7 +22,10 @@ jobs:
     
     - name: Extract version from tag
       id: version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
     
     - name: Build full release
       run: make release
@@ -31,24 +34,39 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: releases/*.zip
-        name: Release ${{ steps.version.outputs.VERSION }}
+        name: Release v${{ steps.version.outputs.VERSION }}
+        tag_name: ${{ github.ref }}
         body: |
           ## Transcriber v${{ steps.version.outputs.VERSION }}
           
-          ### Installation
+          ### 📦 Download & Installation
           
-          1. Download the zip file
-          2. Extract it
+          **Quick Install:**
+          1. Download `transcriber-${{ steps.version.outputs.VERSION }}.zip`
+          2. Extract the zip file
           3. Run `./install.sh` to install system-wide
           
-          ### What's Included
+          **Manual Install:**
+          ```bash
+          sudo cp transcriber /usr/local/bin/
+          ```
           
-          - `transcriber` - The main CLI binary
+          ### 📋 What's Included
+          
+          - `transcriber` - The main CLI binary (signed with Speech Recognition entitlements)
           - `transcriber.entitlements` - Required entitlements file
-          - `install.sh` - Installation script
+          - `install.sh` - Automated installation script
           - `README.md` - Documentation
           
-          Built with Speech Recognition entitlements for macOS.
+          ### ✨ Usage
+          
+          ```bash
+          transcriber --help
+          transcriber audio.mp3
+          transcriber --list-languages
+          ```
+          
+          **Requirements:** macOS with Speech Recognition framework
         draft: false
         prerelease: false
       env:
