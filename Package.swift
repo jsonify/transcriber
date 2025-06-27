@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
     ],
     targets: [
         .executableTarget(
@@ -25,7 +26,9 @@ let package = Package(
         ),
         .target(
             name: "TranscriberCore",
-            dependencies: []
+            dependencies: [
+                .product(name: "Yams", package: "Yams"),
+            ]
         ),
         .testTarget(
             name: "TranscriberTests",
