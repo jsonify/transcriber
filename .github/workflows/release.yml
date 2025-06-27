@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Cache Swift packages
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-swift-
+    
+    - name: Extract version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Build full release
+      run: make release
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: releases/*.zip
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          ## Transcriber v${{ steps.version.outputs.VERSION }}
+          
+          ### Installation
+          
+          1. Download the zip file
+          2. Extract it
+          3. Run `./install.sh` to install system-wide
+          
+          ### What's Included
+          
+          - `transcriber` - The main CLI binary
+          - `transcriber.entitlements` - Required entitlements file
+          - `install.sh` - Installation script
+          - `README.md` - Documentation
+          
+          Built with Speech Recognition entitlements for macOS.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
