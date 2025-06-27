@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift package init:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(swift build)",
+      "Bash(.build/debug/transcriber:*)",
+      "Bash(chmod:*)",
+      "Bash(./build.sh)",
+      "Bash(swift test)",
+      "Bash(./build-signed.sh)",
+      "Bash(.build/release/transcriber:*)",
+      "Bash(swift package:*)",
+      "Bash(swift build:*)"
+    ],
+    "deny": []
+  }
+}
