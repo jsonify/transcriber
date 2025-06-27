@@ -35,7 +35,6 @@ jobs:
       with:
         files: releases/*.zip
         name: Release v${{ steps.version.outputs.VERSION }}
-        tag_name: ${{ github.ref }}
         body: |
           ## Transcriber v${{ steps.version.outputs.VERSION }}
           
