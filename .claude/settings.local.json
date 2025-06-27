@@ -12,8 +12,7 @@
       "Bash(./build-signed.sh)",
       "Bash(.build/release/transcriber:*)",
       "Bash(swift package:*)",
-      "Bash(swift build:*)",
-      "Bash(make:*)"
+      "Bash(swift build:*)"
     ],
     "deny": []
   }
