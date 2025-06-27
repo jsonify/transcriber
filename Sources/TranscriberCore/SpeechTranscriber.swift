@@ -209,7 +209,7 @@ public class SpeechTranscriber: NSObject, ObservableObject {
         
         progressTimer?.invalidate()
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.simulateProgress()
             }
         }
