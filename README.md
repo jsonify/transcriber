@@ -1,6 +1,6 @@
 # Transcriber
 
-A modern macOS speech recognition CLI tool for transcribing audio files using Apple's Speech framework.
+A modern MacOS speech recognition CLI tool for transcribing audio files using Apple's built-in Speech framework.
 
 ## Features
 
