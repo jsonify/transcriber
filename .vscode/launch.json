@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:transcriber}",
+            "name": "Debug transcriber",
+            "program": "${workspaceFolder:transcriber}/.build/debug/transcriber",
+            "preLaunchTask": "swift: Build Debug transcriber"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:transcriber}",
+            "name": "Release transcriber",
+            "program": "${workspaceFolder:transcriber}/.build/release/transcriber",
+            "preLaunchTask": "swift: Build Release transcriber"
+        }
+    ]
+}
