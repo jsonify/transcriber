@@ -3,7 +3,12 @@
 
 # Project Configuration
 PROGRAM_NAME := transcriber
+# Get version from git tag, fallback to 1.0.1 if no tags exist
+VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "1.0.1")
+# Fallback if VERSION is empty
+ifeq ($(VERSION),)
 VERSION := 1.0.1
+endif
 BUILD_DIR := .build
 RELEASE_DIR := releases
 ARCHIVE_DIR := $(RELEASE_DIR)/$(PROGRAM_NAME)-$(VERSION)
