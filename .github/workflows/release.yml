@@ -1,4 +1,4 @@
-name: Release
+name: Release (Optimized)
 
 on:
   push:
@@ -9,19 +9,15 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  prepare:
     runs-on: macos-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      ci-artifacts-available: ${{ steps.check-ci.outputs.available }}
+      ci-run-id: ${{ steps.check-ci.outputs.run-id }}
     
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Cache Swift packages
-      uses: actions/cache@v4
-      with:
-        path: .build
-        key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift') }}
-        restore-keys: |
-          ${{ runner.os }}-swift-
     
     - name: Extract version from tag
       id: version
@@ -30,8 +26,285 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
     
-    - name: Build full release
-      run: make release
+    - name: Check for recent CI artifacts
+      id: check-ci
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Find the most recent successful CI run for this commit
+        COMMIT_SHA="${{ github.sha }}"
+        echo "Checking for CI artifacts for commit: $COMMIT_SHA"
+        
+        # Get recent CI runs for main branch
+        CI_RUN=$(gh run list \
+          --workflow=ci.yml \
+          --branch=main \
+          --status=success \
+          --limit=10 \
+          --json=conclusion,headSha,databaseId,url | \
+          jq -r ".[] | select(.headSha == \"$COMMIT_SHA\" and .conclusion == \"success\") | .databaseId" | \
+          head -1)
+        
+        if [ -n "$CI_RUN" ]; then
+          echo "Found CI run: $CI_RUN"
+          echo "available=true" >> $GITHUB_OUTPUT
+          echo "run-id=$CI_RUN" >> $GITHUB_OUTPUT
+        else
+          echo "No CI artifacts found for this commit"
+          echo "available=false" >> $GITHUB_OUTPUT
+          echo "run-id=" >> $GITHUB_OUTPUT
+        fi
+
+  build-cli:
+    runs-on: macos-latest
+    needs: prepare
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Generate cache key
+      id: cache-key
+      run: |
+        KEY="cli-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('Sources/TranscriberCLI/**', 'Sources/TranscriberCore/**', 'Package.swift') }}"
+        echo "key=$KEY" >> $GITHUB_OUTPUT
+    
+    - name: Cache CLI binary
+      id: cache-cli
+      uses: actions/cache@v4
+      with:
+        path: |
+          .build/release/transcriber
+          transcriber-signed
+        key: ${{ steps.cache-key.outputs.key }}
+    
+    - name: Download CI artifacts (if available)
+      if: needs.prepare.outputs.ci-artifacts-available == 'true' && steps.cache-cli.outputs.cache-hit != 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        echo "Attempting to download CI artifacts from run ${{ needs.prepare.outputs.ci-run-id }}"
+        if gh run download ${{ needs.prepare.outputs.ci-run-id }} --name transcriber-release --dir ci-artifacts; then
+          echo "✅ Downloaded CI artifacts"
+          if [ -f "ci-artifacts/transcriber-${{ needs.prepare.outputs.version }}.zip" ]; then
+            echo "✅ Found release archive, extracting CLI binary"
+            cd ci-artifacts
+            unzip -q "transcriber-${{ needs.prepare.outputs.version }}.zip"
+            if [ -f "transcriber-${{ needs.prepare.outputs.version }}/transcriber" ]; then
+              mkdir -p ../.build/release
+              cp "transcriber-${{ needs.prepare.outputs.version }}/transcriber" ../.build/release/
+              cp "transcriber-${{ needs.prepare.outputs.version }}/transcriber" ../transcriber-signed
+              echo "✅ CLI binary extracted from CI artifacts"
+            fi
+          fi
+        else
+          echo "⚠️  Failed to download CI artifacts, will build from scratch"
+        fi
+    
+    - name: Cache Swift packages
+      if: steps.cache-cli.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-swift-
+    
+    - name: Build CLI (if not cached/downloaded)
+      if: steps.cache-cli.outputs.cache-hit != 'true'
+      run: |
+        if [ ! -f ".build/release/transcriber" ]; then
+          echo "🔨 Building CLI from source..."
+          make build-release-cli
+          make sign
+          cp .build/release/transcriber transcriber-signed
+        else
+          echo "✅ CLI binary already available"
+        fi
+    
+    - name: Test CLI binary
+      run: |
+        if [ -f "transcriber-signed" ]; then
+          ./transcriber-signed --version
+          ./transcriber-signed --help > /dev/null
+        else
+          echo "❌ CLI binary not found"
+          exit 1
+        fi
+    
+    - name: Upload CLI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: transcriber-cli
+        path: |
+          transcriber-signed
+          transcriber.entitlements
+        retention-days: 1
+
+  build-app:
+    runs-on: macos-latest
+    needs: prepare
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Generate cache key
+      id: cache-key
+      run: |
+        KEY="app-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('Sources/TranscriberApp/**', 'Sources/TranscriberCore/**', 'Package.swift') }}"
+        echo "key=$KEY" >> $GITHUB_OUTPUT
+    
+    - name: Cache App binary
+      id: cache-app
+      uses: actions/cache@v4
+      with:
+        path: |
+          .build/release/TranscriberApp
+          TranscriberApp-signed
+        key: ${{ steps.cache-key.outputs.key }}
+    
+    - name: Cache Swift packages
+      if: steps.cache-app.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-swift-
+    
+    - name: Build App (if not cached)
+      if: steps.cache-app.outputs.cache-hit != 'true'
+      run: |
+        echo "🔨 Building App from source..."
+        make build-release-app
+        make sign-app
+        cp .build/release/TranscriberApp TranscriberApp-signed
+    
+    - name: Test App binary
+      run: |
+        if [ -f "TranscriberApp-signed" ]; then
+          file TranscriberApp-signed
+          otool -l TranscriberApp-signed | grep -A5 LC_CODE_SIGNATURE || echo "No code signature found"
+        else
+          echo "❌ App binary not found"
+          exit 1
+        fi
+    
+    - name: Upload App artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: transcriber-app
+        path: |
+          TranscriberApp-signed
+          transcriber.entitlements
+        retention-days: 1
+
+  test-release:
+    runs-on: macos-latest
+    needs: [prepare, build-cli, build-app]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download CLI artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: transcriber-cli
+        path: artifacts/cli
+    
+    - name: Download App artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: transcriber-app
+        path: artifacts/app
+    
+    - name: Test release binaries
+      run: |
+        echo "🧪 Testing CLI binary..."
+        chmod +x artifacts/cli/transcriber-signed
+        artifacts/cli/transcriber-signed --version
+        artifacts/cli/transcriber-signed --help > /dev/null
+        
+        echo "🧪 Testing App binary..."
+        chmod +x artifacts/app/TranscriberApp-signed
+        file artifacts/app/TranscriberApp-signed
+        
+        echo "✅ All release binaries tested successfully"
+
+  create-assets:
+    runs-on: macos-latest
+    needs: [prepare, build-cli, build-app, test-release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download CLI artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: transcriber-cli
+        path: artifacts/cli
+    
+    - name: Download App artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: transcriber-app
+        path: artifacts/app
+    
+    - name: Setup release directory
+      run: |
+        mkdir -p releases
+        mkdir -p .build/release
+        
+        # Move binaries to expected locations
+        cp artifacts/cli/transcriber-signed .build/release/transcriber
+        cp artifacts/app/TranscriberApp-signed .build/release/TranscriberApp
+        
+        chmod +x .build/release/transcriber
+        chmod +x .build/release/TranscriberApp
+    
+    - name: Create ZIP archive
+      run: |
+        echo "📦 Creating ZIP archive..."
+        VERSION="${{ needs.prepare.outputs.version }}"
+        ARCHIVE_DIR="releases/transcriber-$VERSION"
+        
+        mkdir -p "$ARCHIVE_DIR"
+        cp .build/release/transcriber "$ARCHIVE_DIR/"
+        cp transcriber.entitlements "$ARCHIVE_DIR/"
+        cp README.md "$ARCHIVE_DIR/"
+        
+        # Create install script
+        cat > "$ARCHIVE_DIR/install.sh" << 'EOF'
+#!/bin/bash
+set -e
+echo "Installing Transcriber..."
+sudo cp transcriber /usr/local/bin/
+echo "✅ Transcriber installed to /usr/local/bin/"
+echo "Run 'transcriber --help' to get started"
+EOF
+        chmod +x "$ARCHIVE_DIR/install.sh"
+        
+        cd releases
+        zip -r "transcriber-$VERSION.zip" "transcriber-$VERSION"
+        echo "✅ ZIP archive created"
+    
+    - name: Create PKG installer
+      run: |
+        echo "📦 Creating PKG installer..."
+        make installer
+        echo "✅ PKG installer created"
+    
+    - name: Upload release assets
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-assets
+        path: |
+          releases/*.zip
+          releases/*.pkg
+        retention-days: 1
     
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
@@ -39,20 +312,20 @@ jobs:
         files: |
           releases/*.zip
           releases/*.pkg
-        name: Release v${{ steps.version.outputs.VERSION }}
+        name: Release v${{ needs.prepare.outputs.version }}
         body: |
-          ## Transcriber v${{ steps.version.outputs.VERSION }}
+          ## Transcriber v${{ needs.prepare.outputs.version }}
           
           ### 📦 Download & Installation
           
           **🚀 Recommended: macOS Installer Package**
-          1. Download `Transcriber-${{ steps.version.outputs.VERSION }}.pkg`
+          1. Download `Transcriber-${{ needs.prepare.outputs.version }}.pkg`
           2. Double-click to run the installer
           3. Follow the installation wizard
           4. Includes both GUI app and CLI tool with proper permissions
           
           **⚡ Quick Install (ZIP):**
-          1. Download `transcriber-${{ steps.version.outputs.VERSION }}.zip`
+          1. Download `transcriber-${{ needs.prepare.outputs.version }}.zip`
           2. Extract the zip file
           3. Run `./install.sh` to install system-wide
           

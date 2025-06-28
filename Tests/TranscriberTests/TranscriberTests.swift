@@ -1,6 +1,12 @@
 import XCTest
 @testable import TranscriberCore
 
+extension String {
+    func matches(_ regex: String) -> Bool {
+        return self.range(of: regex, options: .regularExpression, range: nil, locale: nil) != nil
+    }
+}
+
 final class TranscriberTests: XCTestCase {
     
     func testTranscriptionResultCreation() {
@@ -363,6 +369,28 @@ final class TranscriberTests: XCTestCase {
             
         } catch {
             XCTFail("Failed to test YAML configuration loading: \(error)")
+        }
+    }
+    
+    func testVersionFileReadability() {
+        // Test that VERSION file exists and can be read
+        let currentDirectoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let versionFileURL = currentDirectoryURL.appendingPathComponent("VERSION")
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: versionFileURL.path), 
+                      "VERSION file should exist in project root")
+        
+        do {
+            let versionContent = try String(contentsOf: versionFileURL, encoding: .utf8)
+            let trimmedVersion = versionContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            XCTAssertFalse(trimmedVersion.isEmpty, "VERSION file should not be empty")
+            XCTAssertTrue(trimmedVersion.matches(#"^\d+\.\d+\.\d+$"#), 
+                          "VERSION file should contain semantic version format (e.g., 2.1.2)")
+            XCTAssertEqual(trimmedVersion, "2.1.3", "VERSION file should contain current version")
+            
+        } catch {
+            XCTFail("Failed to read VERSION file: \(error)")
         }
     }
 }
