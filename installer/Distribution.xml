@@ -48,7 +48,7 @@
     <!-- JavaScript functions -->
     <script>
         function pm_install_check() {
-            if (!(system.compareVersions(system.version.ProductVersion, '13.0') >= 0)) {
+            if (!(system.compareVersions(system.version.ProductVersion, '13.0') &gt;= 0)) {
                 my.result.title = 'macOS Version Too Old';
                 my.result.message = 'This application requires macOS 13.0 or later.';
                 my.result.type = 'Fatal';
@@ -75,7 +75,7 @@
             try {
                 var availableSpace = system.files.freeSpaceAtPath(targetVolume);
                 
-                if (availableSpace < requiredSpaceBytes) {
+                if (availableSpace &lt; requiredSpaceBytes) {
                     var requiredMB = Math.ceil(requiredSpaceBytes / 1048576);
                     var availableMB = Math.floor(availableSpace / 1048576);
                     
