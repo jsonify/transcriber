@@ -4,11 +4,21 @@
 # Project Configuration
 PROGRAM_NAME := transcriber
 APP_NAME := TranscriberApp
-# Get version from git tag, fallback to 1.0.1 if no tags exist
-VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "1.0.1")
-# Fallback if VERSION is empty
-ifeq ($(VERSION),)
-VERSION := 1.0.1
+# Version management with VERSION file fallback
+VERSION_FILE := VERSION
+GIT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+FILE_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null | tr -d '\n' || echo "")
+
+# Use git tag if available, otherwise fall back to VERSION file with warning
+ifeq ($(GIT_VERSION),)
+  ifneq ($(FILE_VERSION),)
+    VERSION := $(FILE_VERSION)
+    $(warning ⚠️  No git tags found, using VERSION file: $(VERSION))
+  else
+    $(error ❌ Neither git tags nor VERSION file found - cannot determine version)
+  endif
+else
+  VERSION := $(GIT_VERSION)
 endif
 BUILD_DIR := .build
 RELEASE_DIR := releases
@@ -243,11 +253,29 @@ lint:
 # Release management
 .PHONY: version
 version:
-	@echo "Current version: $(VERSION)"
-	@echo "To update version:"
-	@echo "  1. Update VERSION in Makefile"
-	@echo "  2. Update version in Sources/TranscriberCLI/main.swift"
+	@echo "📋 Version Information:"
+	@echo "   Current: $(VERSION)"
+	@echo "   Git tag: $(GIT_VERSION)"
+	@echo "   VERSION file: $(FILE_VERSION)"
+	@echo ""
+	@echo "💡 To update version:"
+	@echo "  1. Create git tag: git tag v<version>"
+	@echo "  2. Update VERSION file: make update-version-file"
 	@echo "  3. Run 'make release' to build new version"
+
+.PHONY: version-info
+version-info: version
+
+.PHONY: update-version-file
+update-version-file:
+	@echo "📝 Updating VERSION file to match git tag..."
+	@if [ -z "$(GIT_VERSION)" ]; then \
+		echo "❌ No git tags found - cannot update VERSION file"; \
+		echo "Create a git tag first: git tag v<version>"; \
+		exit 1; \
+	fi
+	@echo "$(GIT_VERSION)" > $(VERSION_FILE)
+	@echo "✅ VERSION file updated to $(GIT_VERSION)"
 
 .PHONY: tag
 tag:
@@ -260,7 +288,9 @@ tag:
 	git commit -m "Release v$(VERSION)" || true
 	git tag -a "v$(VERSION)" -m "Release version $(VERSION)"
 	@echo "✅ Tag v$(VERSION) created"
-	@echo "Push with: git push origin v$(VERSION)"
+	@echo "💡 Don't forget to:"
+	@echo "  1. Push tag: git push origin v$(VERSION)"
+	@echo "  2. Update VERSION file: make update-version-file"
 
 # Info targets
 .PHONY: info
