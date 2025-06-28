@@ -387,7 +387,7 @@ final class TranscriberTests: XCTestCase {
             XCTAssertFalse(trimmedVersion.isEmpty, "VERSION file should not be empty")
             XCTAssertTrue(trimmedVersion.matches(#"^\d+\.\d+\.\d+$"#), 
                           "VERSION file should contain semantic version format (e.g., 2.1.2)")
-            XCTAssertEqual(trimmedVersion, "2.1.2", "VERSION file should contain current version")
+            XCTAssertEqual(trimmedVersion, "2.1.3", "VERSION file should contain current version")
             
         } catch {
             XCTFail("Failed to read VERSION file: \(error)")
