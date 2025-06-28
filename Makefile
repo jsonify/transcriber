@@ -19,8 +19,8 @@ SWIFT_BUILD_FLAGS := -c release --disable-sandbox
 ENTITLEMENTS_FILE := transcriber.entitlements
 
 # Derived Paths
-RELEASE_BINARY := $(BUILD_DIR)/release/$(PROGRAM_NAME)
-RELEASE_APP := $(BUILD_DIR)/release/$(APP_NAME)
+RELEASE_BINARY := $(BUILD_DIR)/x86_64-apple-macosx/release/$(PROGRAM_NAME)
+RELEASE_APP := $(BUILD_DIR)/x86_64-apple-macosx/release/$(APP_NAME)
 ARCHIVE_BINARY := $(ARCHIVE_DIR)/$(PROGRAM_NAME)
 ARCHIVE_APP := $(ARCHIVE_DIR)/$(APP_NAME).app
 ARCHIVE_FILE := $(RELEASE_DIR)/$(PROGRAM_NAME)-$(VERSION).zip
@@ -75,7 +75,7 @@ release-app: clean build-release-app sign-app archive-app
 .PHONY: build-release-cli
 build-release-cli:
 	@echo "📦 Building $(PROGRAM_NAME) CLI v$(VERSION) (release)..."
-	swift build $(SWIFT_BUILD_FLAGS) --target TranscriberCLI
+	swift build $(SWIFT_BUILD_FLAGS) --product $(PROGRAM_NAME)
 	@if [ ! -f "$(RELEASE_BINARY)" ]; then \
 		echo "❌ CLI build failed - binary not found"; \
 		exit 1; \
@@ -85,7 +85,7 @@ build-release-cli:
 .PHONY: build-release-app
 build-release-app:
 	@echo "📱 Building $(APP_NAME) v$(VERSION) (release)..."
-	swift build $(SWIFT_BUILD_FLAGS) --target TranscriberApp
+	swift build $(SWIFT_BUILD_FLAGS) --product $(APP_NAME)
 	@if [ ! -f "$(RELEASE_APP)" ]; then \
 		echo "❌ App build failed - binary not found"; \
 		exit 1; \
