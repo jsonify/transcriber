@@ -55,6 +55,7 @@ func getFileIcon(_ fileName: String) -> String {
     case "wav": return "🎤"
     case "m4a", "aac": return "🎧"
     case "aiff", "caf": return "🔊"
+    case "mp4", "mov", "avi", "mkv", "m4v", "3gp", "webm": return "🎬"
     default: return "🎙️"
     }
 }
@@ -89,11 +90,11 @@ func showSupportedLanguages(_ languages: [(String, Bool)]) {
 struct TranscriberCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "transcriber",
-        abstract: "🎙️  A modern macOS speech recognition tool for transcribing audio files",
+        abstract: "🎙️  A modern macOS speech recognition tool for transcribing audio files and extracting audio from video files",
         version: "1.0.0"
     )
     
-    @Argument(help: "Input audio file path(s)")
+    @Argument(help: "Input audio/video file path(s)")
     var inputFiles: [String] = []
     
     @Option(name: .shortAndLong, help: "Output format (txt, json, srt, vtt)")
@@ -128,6 +129,12 @@ struct TranscriberCommand: AsyncParsableCommand {
     
     @Flag(name: .long, help: "Generate sample configuration file")
     var generateConfig: Bool = false
+    
+    @Flag(name: .long, help: "Extract audio from video files to WAV format")
+    var extractAudio: Bool = false
+    
+    @Option(name: .long, help: "Audio format for extraction (wav, m4a, aiff)")
+    var audioFormat: String?
     
     func run() async throws {
         let transcriber = await SpeechTranscriber()
@@ -170,6 +177,12 @@ struct TranscriberCommand: AsyncParsableCommand {
         guard !inputFiles.isEmpty else {
             showError("No input files specified", details: "Use 'transcriber --help' for usage information")
             throw ExitCode.failure
+        }
+        
+        // Handle audio extraction mode
+        if extractAudio {
+            try await handleAudioExtraction()
+            return
         }
         
         guard let outputFormat = OutputFormat(rawValue: finalConfig.format ?? "txt") else {
@@ -228,6 +241,32 @@ struct TranscriberCommand: AsyncParsableCommand {
             }
             
             do {
+                var audioFileURL = fileURL
+                
+                // Check if this is a video file and extract audio if needed
+                if AudioExtractor.isVideoFile(fileURL) {
+                    print("   🎬 Video file detected, extracting audio...")
+                    
+                    let extractor = await AudioExtractor()
+                    await extractor.setProgressCallback { progress, message in
+                        if (finalConfig.showProgress ?? false) || !(finalConfig.noColor ?? false) {
+                            displayProgress(progress, message: message)
+                        }
+                    }
+                    
+                    let audioFormat = AudioFormat(rawValue: audioFormat ?? "wav") ?? .wav
+                    let extractedURL = AudioExtractor.generateAudioOutputURL(from: fileURL, format: audioFormat)
+                    
+                    try await extractor.extractAudio(from: fileURL, to: extractedURL, format: audioFormat)
+                    audioFileURL = extractedURL
+                    
+                    if (finalConfig.showProgress ?? false) || !(finalConfig.noColor ?? false) {
+                        finishProgress()
+                    }
+                    
+                    showSuccess("Audio extracted to: \(extractedURL.lastPathComponent)")
+                }
+                
                 // Start progress
                 if (finalConfig.showProgress ?? false) || !(finalConfig.noColor ?? false) {
                     print("   \u{001B}[2mStarting transcription...\u{001B}[0m")
@@ -236,7 +275,7 @@ struct TranscriberCommand: AsyncParsableCommand {
                 
                 // Perform transcription
                 let result = try await transcriber.transcribeAudioFile(
-                    at: fileURL,
+                    at: audioFileURL,
                     language: finalConfig.language ?? "en-US",
                     onDevice: finalConfig.onDevice ?? false
                 )
@@ -333,6 +372,138 @@ struct TranscriberCommand: AsyncParsableCommand {
         let outputURL = inputURL.deletingPathExtension()
             .appendingPathExtension(format.fileExtension)
         return outputURL.path
+    }
+    
+    private func handleAudioExtraction() async throws {
+        let audioFormatString = audioFormat ?? "wav"
+        guard let audioFormat = AudioFormat(rawValue: audioFormatString) else {
+            showError("Unsupported audio format '\(audioFormatString)'",
+                     details: "Supported formats: \(AudioFormat.allCases.map(\.rawValue).joined(separator: ", "))")
+            throw ExitCode.failure
+        }
+        
+        // Show beautiful header
+        if !noColor {
+            showHeader()
+            print("🎵 \u{001B}[1mAudio Extraction Mode\u{001B}[0m")
+            print("   Format: \u{001B}[33m\(audioFormat.rawValue)\u{001B}[0m")
+            print("   Files: \u{001B}[33m\(inputFiles.count)\u{001B}[0m")
+            print()
+        }
+        
+        let extractor = await AudioExtractor()
+        await extractor.setProgressCallback { progress, message in
+            if showProgress || !noColor {
+                displayProgress(progress, message: message)
+            }
+        }
+        
+        var successCount = 0
+        var failCount = 0
+        
+        for (index, inputFile) in inputFiles.enumerated() {
+            let fileURL = URL(fileURLWithPath: inputFile)
+            
+            // Check file existence
+            guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                showError("File not found: \(inputFile)")
+                failCount += 1
+                continue
+            }
+            
+            // Check if it's a video file
+            guard AudioExtractor.isVideoFile(fileURL) else {
+                showError("Not a video file: \(inputFile)",
+                         details: "Audio extraction only works with video files (mp4, mov, avi, etc.)")
+                failCount += 1
+                continue
+            }
+            
+            let fileIcon = "🎬"
+            print("\(fileIcon) \u{001B}[1mExtracting [\(index + 1)/\(inputFiles.count)]\u{001B}[0m \u{001B}[2m\(fileURL.lastPathComponent)\u{001B}[0m")
+            
+            // Show file info if verbose
+            if verbose {
+                let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int64) ?? 0
+                let formatter = ByteCountFormatter()
+                formatter.allowedUnits = [.useKB, .useMB, .useGB]
+                formatter.countStyle = .file
+                print("   📊 Size: \u{001B}[2m\(formatter.string(fromByteCount: fileSize))\u{001B}[0m")
+            }
+            
+            do {
+                let outputURL = determineAudioOutputPath(for: fileURL, format: audioFormat)
+                
+                // Start progress
+                if showProgress || !noColor {
+                    print("   \u{001B}[2mStarting audio extraction...\u{001B}[0m")
+                    displayProgress(0.0, message: "Initializing...")
+                }
+                
+                try await extractor.extractAudio(from: fileURL, to: outputURL, format: audioFormat)
+                
+                // Finish progress
+                if showProgress || !noColor {
+                    displayProgress(1.0, message: "Complete!")
+                    finishProgress()
+                }
+                
+                showSuccess("Audio Extraction Complete")
+                print("   💾 Saved to: \u{001B}[36m\(outputURL.path)\u{001B}[0m")
+                
+                if verbose {
+                    let audioFileSize = (try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size] as? Int64) ?? 0
+                    let formatter = ByteCountFormatter()
+                    formatter.allowedUnits = [.useKB, .useMB, .useGB]
+                    formatter.countStyle = .file
+                    print("   📊 Audio size: \u{001B}[2m\(formatter.string(fromByteCount: audioFileSize))\u{001B}[0m")
+                }
+                
+                print()
+                successCount += 1
+                
+            } catch {
+                if showProgress || !noColor {
+                    finishProgress()
+                }
+                
+                showError("Failed to extract audio from \(inputFile)", details: error.localizedDescription)
+                failCount += 1
+            }
+        }
+        
+        // Show batch summary if multiple files
+        if inputFiles.count > 1 {
+            print("📊 \u{001B}[1mAudio Extraction Summary\u{001B}[0m")
+            print("   Total: \u{001B}[2m\(inputFiles.count)\u{001B}[0m")
+            print("   ✅ Successful: \u{001B}[32m\(successCount)\u{001B}[0m")
+            if failCount > 0 {
+                print("   ❌ Failed: \u{001B}[31m\(failCount)\u{001B}[0m")
+            }
+            print()
+        }
+    }
+    
+    private func determineAudioOutputPath(for videoURL: URL, format: AudioFormat) -> URL {
+        if let explicitOutput = output {
+            return URL(fileURLWithPath: explicitOutput)
+        }
+        
+        let baseName = videoURL.deletingPathExtension().lastPathComponent
+        
+        if let outputDirectory = outputDir {
+            let outputURL = URL(fileURLWithPath: outputDirectory)
+                .appendingPathComponent("\(baseName).\(format.fileExtension)")
+            
+            try? FileManager.default.createDirectory(
+                at: outputURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            
+            return outputURL
+        }
+        
+        return AudioExtractor.generateAudioOutputURL(from: videoURL, format: format)
     }
     
     private func handleGenerateConfig() throws {
