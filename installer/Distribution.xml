@@ -32,10 +32,10 @@
     
     <!-- Define the choices -->
     <choice id="default"/>
-    <choice id="com.transcriber.app" visible="false">
+    <choice id="com.transcriber.app" visible="true" title="Transcriber Application" description="Install the Transcriber application to /Applications" start_selected="true" enabled="true">
         <pkg-ref id="com.transcriber.app"/>
     </choice>
-    <choice id="com.transcriber.cli" visible="true" title="Command Line Tools" description="Install the transcriber command-line interface" start_selected="true">
+    <choice id="com.transcriber.cli" visible="true" title="Command Line Tools" description="Install the transcriber command-line interface to /usr/local/bin" start_selected="true" enabled="true">
         <pkg-ref id="com.transcriber.cli"/>
     </choice>
     

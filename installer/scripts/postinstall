@@ -10,57 +10,147 @@ set -e
 TARGET_VOLUME="$3"
 INSTALL_LOCATION="${TARGET_VOLUME}/Applications"
 
-echo "Post-install: Finalizing Transcriber installation..."
+# Progress tracking
+TOTAL_STEPS=7
+CURRENT_STEP=0
+
+# Function to show progress
+show_progress() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo "[$CURRENT_STEP/$TOTAL_STEPS] $1"
+}
+
+# Function to log with timestamp
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+}
+
+echo "🔧 Transcriber Post-Installation Setup"
+echo "======================================"
+log "Starting post-installation configuration..."
+log "Target volume: $TARGET_VOLUME"
+log "Installation location: $INSTALL_LOCATION"
+echo ""
 
 # Set proper permissions for the app bundle
+show_progress "Configuring application permissions..."
 if [ -d "$INSTALL_LOCATION/Transcriber.app" ]; then
-    echo "Post-install: Setting permissions for Transcriber.app..."
-    chown -R root:admin "$INSTALL_LOCATION/Transcriber.app"
-    chmod -R 755 "$INSTALL_LOCATION/Transcriber.app"
+    log "Setting ownership and permissions for Transcriber.app..."
+    
+    # Set ownership
+    if chown -R root:admin "$INSTALL_LOCATION/Transcriber.app"; then
+        log "✅ App bundle ownership set successfully"
+    else
+        log "⚠️  Warning: Could not set app bundle ownership"
+    fi
+    
+    # Set base permissions
+    if chmod -R 755 "$INSTALL_LOCATION/Transcriber.app"; then
+        log "✅ App bundle permissions set successfully"
+    else
+        log "❌ Error: Could not set app bundle permissions"
+        exit 1
+    fi
     
     # Set executable bit on the main binary
-    if [ -f "$INSTALL_LOCATION/Transcriber.app/Contents/MacOS/TranscriberApp" ]; then
-        chmod +x "$INSTALL_LOCATION/Transcriber.app/Contents/MacOS/TranscriberApp"
-        echo "Post-install: Set executable permissions on app binary"
+    APP_BINARY="$INSTALL_LOCATION/Transcriber.app/Contents/MacOS/TranscriberApp"
+    if [ -f "$APP_BINARY" ]; then
+        if chmod +x "$APP_BINARY"; then
+            log "✅ App binary executable permissions set"
+        else
+            log "❌ Error: Could not set executable permissions on app binary"
+            exit 1
+        fi
+    else
+        log "⚠️  Warning: App binary not found at expected location"
     fi
+else
+    log "ℹ️  Skipping app permissions (app not installed)"
 fi
 
 # Set proper permissions for CLI tool
+show_progress "Configuring CLI tool permissions..."
 if [ -f "/usr/local/bin/transcriber" ]; then
-    echo "Post-install: Setting permissions for CLI tool..."
-    chown root:admin "/usr/local/bin/transcriber"
-    chmod 755 "/usr/local/bin/transcriber"
+    log "Setting permissions for CLI tool..."
+    
+    if chown root:admin "/usr/local/bin/transcriber"; then
+        log "✅ CLI tool ownership set successfully"
+    else
+        log "⚠️  Warning: Could not set CLI tool ownership"
+    fi
+    
+    if chmod 755 "/usr/local/bin/transcriber"; then
+        log "✅ CLI tool permissions set successfully"
+    else
+        log "❌ Error: Could not set CLI tool permissions"
+        exit 1
+    fi
+    
+    # Verify CLI tool is functional
+    if /usr/local/bin/transcriber --version >/dev/null 2>&1; then
+        log "✅ CLI tool verification successful"
+    else
+        log "⚠️  Warning: CLI tool may not be functional"
+    fi
+else
+    log "ℹ️  Skipping CLI permissions (CLI not installed)"
 fi
 
 # Add /usr/local/bin to PATH if not already there (for the current user)
+show_progress "Configuring shell environment..."
 USER_HOME=$(eval echo ~${SUDO_USER})
 if [ -n "$SUDO_USER" ] && [ -d "$USER_HOME" ]; then
+    log "Configuring PATH for user: $SUDO_USER"
+    
     SHELL_RC=""
     if [ -f "$USER_HOME/.zshrc" ]; then
         SHELL_RC="$USER_HOME/.zshrc"
+        log "Found shell config: .zshrc"
     elif [ -f "$USER_HOME/.bash_profile" ]; then
         SHELL_RC="$USER_HOME/.bash_profile"
+        log "Found shell config: .bash_profile"
     elif [ -f "$USER_HOME/.bashrc" ]; then
         SHELL_RC="$USER_HOME/.bashrc"
+        log "Found shell config: .bashrc"
     fi
     
     if [ -n "$SHELL_RC" ]; then
         if ! grep -q '/usr/local/bin' "$SHELL_RC"; then
-            echo 'export PATH="/usr/local/bin:$PATH"' >> "$SHELL_RC"
-            echo "Post-install: Added /usr/local/bin to PATH in $SHELL_RC"
+            if echo 'export PATH="/usr/local/bin:$PATH"' >> "$SHELL_RC"; then
+                log "✅ Added /usr/local/bin to PATH in $(basename "$SHELL_RC")"
+            else
+                log "⚠️  Warning: Could not modify shell configuration"
+            fi
+        else
+            log "ℹ️  PATH already includes /usr/local/bin"
         fi
+    else
+        log "ℹ️  No shell configuration file found"
     fi
+else
+    log "ℹ️  Skipping PATH configuration (no user context)"
 fi
 
 # Register the app with Launch Services
+show_progress "Registering application with system..."
 if [ -d "$INSTALL_LOCATION/Transcriber.app" ]; then
-    echo "Post-install: Registering app with Launch Services..."
-    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -v -f "$INSTALL_LOCATION/Transcriber.app" || true
+    log "Registering app with Launch Services..."
+    
+    if /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -v -f "$INSTALL_LOCATION/Transcriber.app" >/dev/null 2>&1; then
+        log "✅ Application registered with Launch Services"
+    else
+        log "⚠️  Warning: Could not register app with Launch Services"
+    fi
+else
+    log "ℹ️  Skipping app registration (app not installed)"
 fi
 
 # Create uninstall script
+show_progress "Creating uninstaller..."
+log "Setting up uninstaller script..."
 UNINSTALL_SCRIPT="/usr/local/bin/uninstall-transcriber"
-cat > "$UNINSTALL_SCRIPT" << 'EOF'
+
+if cat > "$UNINSTALL_SCRIPT" << 'EOF'
 #!/bin/bash
 
 echo "Uninstalling Transcriber..."
@@ -82,16 +172,77 @@ rm -f "/usr/local/bin/uninstall-transcriber"
 
 echo "Transcriber has been completely uninstalled."
 EOF
+then
+    log "✅ Uninstaller script created successfully"
+else
+    log "❌ Error: Could not create uninstaller script"
+    exit 1
+fi
 
-chmod +x "$UNINSTALL_SCRIPT"
-echo "Post-install: Created uninstall script at $UNINSTALL_SCRIPT"
+if chmod +x "$UNINSTALL_SCRIPT"; then
+    log "✅ Uninstaller permissions set"
+else
+    log "⚠️  Warning: Could not set uninstaller permissions"
+fi
 
-echo "Post-install: Installation complete!"
+# Verify installation
+show_progress "Verifying installation..."
+INSTALL_SUCCESS=true
+
+# Check app installation
+if [ -d "$INSTALL_LOCATION/Transcriber.app" ]; then
+    if [ -f "$INSTALL_LOCATION/Transcriber.app/Contents/MacOS/TranscriberApp" ]; then
+        log "✅ Application installed and verified"
+    else
+        log "❌ Application bundle incomplete"
+        INSTALL_SUCCESS=false
+    fi
+fi
+
+# Check CLI installation
+if [ -f "/usr/local/bin/transcriber" ]; then
+    if [ -x "/usr/local/bin/transcriber" ]; then
+        log "✅ CLI tool installed and verified"
+    else
+        log "❌ CLI tool not executable"
+        INSTALL_SUCCESS=false
+    fi
+fi
+
+# Final status
+show_progress "Installation completed"
 echo ""
-echo "Transcriber has been installed successfully."
-echo "• GUI App: Available in Applications folder"
-echo "• CLI Tool: 'transcriber' command available in Terminal"
-echo "• To uninstall: Run 'sudo uninstall-transcriber'"
+
+if [ "$INSTALL_SUCCESS" = true ]; then
+    echo "🎉 Transcriber Installation Successful!"
+    echo "======================================="
+    log "All components installed successfully"
+    echo ""
+    echo "📱 GUI Application:"
+    echo "   • Location: /Applications/Transcriber.app"
+    echo "   • Launch from Applications folder or Spotlight"
+    echo ""
+    echo "⌨️  Command Line Interface:"
+    echo "   • Command: 'transcriber'"
+    echo "   • Help: 'transcriber --help'"
+    echo "   • Version: 'transcriber --version'"
+    echo ""
+    echo "🗑️  Uninstall:"
+    echo "   • Run: 'sudo uninstall-transcriber'"
+    echo ""
+    echo "🔐 Permissions:"
+    echo "   • Speech Recognition permission will be requested on first use"
+    echo "   • Grant permission when prompted for transcription features"
+    echo ""
+    log "Post-installation setup completed successfully"
+else
+    echo "⚠️  Installation completed with warnings"
+    echo "Some components may not function correctly"
+    echo "Check the installation logs for details"
+    log "Post-installation completed with errors"
+fi
+
 echo ""
+echo "Thank you for installing Transcriber!"
 
 exit 0
