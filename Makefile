@@ -19,8 +19,6 @@ SWIFT_BUILD_FLAGS := -c release --disable-sandbox
 ENTITLEMENTS_FILE := transcriber.entitlements
 
 # Derived Paths
-RELEASE_BINARY := $(BUILD_DIR)/x86_64-apple-macosx/release/$(PROGRAM_NAME)
-RELEASE_APP := $(BUILD_DIR)/x86_64-apple-macosx/release/$(APP_NAME)
 ARCHIVE_BINARY := $(ARCHIVE_DIR)/$(PROGRAM_NAME)
 ARCHIVE_APP := $(ARCHIVE_DIR)/$(APP_NAME).app
 ARCHIVE_FILE := $(RELEASE_DIR)/$(PROGRAM_NAME)-$(VERSION).zip
@@ -76,21 +74,29 @@ release-app: clean build-release-app sign-app archive-app
 build-release-cli:
 	@echo "📦 Building $(PROGRAM_NAME) CLI v$(VERSION) (release)..."
 	swift build $(SWIFT_BUILD_FLAGS) --product $(PROGRAM_NAME)
-	@if [ ! -f "$(RELEASE_BINARY)" ]; then \
-		echo "❌ CLI build failed - binary not found"; \
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
+	if [ ! -f "$$BINARY_PATH" ]; then \
+		echo "❌ CLI build failed - binary not found at $$BINARY_PATH"; \
+		echo "Directory contents:"; \
+		ls -la "$$BIN_PATH" 2>/dev/null || echo "Directory does not exist"; \
 		exit 1; \
-	fi
-	@echo "✅ CLI release build complete"
+	fi; \
+	echo "✅ CLI release build complete at $$BINARY_PATH"
 
 .PHONY: build-release-app
 build-release-app:
 	@echo "📱 Building $(APP_NAME) v$(VERSION) (release)..."
 	swift build $(SWIFT_BUILD_FLAGS) --product $(APP_NAME)
-	@if [ ! -f "$(RELEASE_APP)" ]; then \
-		echo "❌ App build failed - binary not found"; \
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(APP_NAME)"; \
+	if [ ! -f "$$BINARY_PATH" ]; then \
+		echo "❌ App build failed - binary not found at $$BINARY_PATH"; \
+		echo "Directory contents:"; \
+		ls -la "$$BIN_PATH" 2>/dev/null || echo "Directory does not exist"; \
 		exit 1; \
-	fi
-	@echo "✅ App release build complete"
+	fi; \
+	echo "✅ App release build complete at $$BINARY_PATH"
 
 .PHONY: build-release-all
 build-release-all: build-release-cli build-release-app
@@ -107,12 +113,14 @@ sign: build-release-cli
 		echo "❌ Entitlements file not found: $(ENTITLEMENTS_FILE)"; \
 		exit 1; \
 	fi
-	codesign --remove-signature "$(RELEASE_BINARY)" 2>/dev/null || true
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
+	codesign --remove-signature "$$BINARY_PATH" 2>/dev/null || true; \
 	codesign --force \
 	         --sign - \
 	         --entitlements "$(ENTITLEMENTS_FILE)" \
 	         --options runtime \
-	         "$(RELEASE_BINARY)"
+	         "$$BINARY_PATH"
 	@echo "✅ CLI code signing complete"
 
 .PHONY: sign-app
@@ -122,12 +130,14 @@ sign-app: build-release-app
 		echo "❌ Entitlements file not found: $(ENTITLEMENTS_FILE)"; \
 		exit 1; \
 	fi
-	codesign --remove-signature "$(RELEASE_APP)" 2>/dev/null || true
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(APP_NAME)"; \
+	codesign --remove-signature "$$BINARY_PATH" 2>/dev/null || true; \
 	codesign --force \
 	         --sign - \
 	         --entitlements "$(ENTITLEMENTS_FILE)" \
 	         --options runtime \
-	         "$(RELEASE_APP)"
+	         "$$BINARY_PATH"
 	@echo "✅ App code signing complete"
 
 .PHONY: sign-all
@@ -137,19 +147,23 @@ sign-all: sign sign-app
 .PHONY: verify
 verify: sign
 	@echo "🔍 Verifying signature and entitlements..."
-	codesign -v "$(RELEASE_BINARY)"
-	codesign -d --entitlements - "$(RELEASE_BINARY)" > /dev/null 2>&1
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
+	codesign -v "$$BINARY_PATH"; \
+	codesign -d --entitlements - "$$BINARY_PATH" > /dev/null 2>&1
 	@echo "✅ Signature verification complete"
 
 .PHONY: test-release
 test-release: verify
 	@echo "🧪 Testing release binary..."
-	@echo "  • Testing help output..."
-	@"$(RELEASE_BINARY)" --help > /dev/null
-	@echo "  • Testing version output..."
-	@"$(RELEASE_BINARY)" --version > /dev/null
-	@echo "  • Testing language listing..."
-	@timeout 30s "$(RELEASE_BINARY)" --list-languages > /dev/null 2>&1 || true
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
+	echo "  • Testing help output..."; \
+	"$$BINARY_PATH" --help > /dev/null; \
+	echo "  • Testing version output..."; \
+	"$$BINARY_PATH" --version > /dev/null; \
+	echo "  • Testing language listing..."; \
+	timeout 30s "$$BINARY_PATH" --list-languages > /dev/null 2>&1 || true
 	@echo "✅ Release binary tests passed"
 
 .PHONY: archive
@@ -164,7 +178,9 @@ archive: verify archive-cli archive-app
 archive-cli: verify
 	@echo "📦 Creating CLI release archive..."
 	mkdir -p "$(ARCHIVE_DIR)"
-	cp "$(RELEASE_BINARY)" "$(ARCHIVE_BINARY)"
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
+	cp "$$BINARY_PATH" "$(ARCHIVE_BINARY)"
 	cp README.md "$(ARCHIVE_DIR)/"
 	cp transcriber.entitlements "$(ARCHIVE_DIR)/"
 
@@ -172,7 +188,9 @@ archive-cli: verify
 archive-app: sign-app
 	@echo "📱 Creating App release archive..."
 	mkdir -p "$(ARCHIVE_DIR)"
-	cp "$(RELEASE_APP)" "$(ARCHIVE_DIR)/$(APP_NAME)"
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(APP_NAME)"; \
+	cp "$$BINARY_PATH" "$(ARCHIVE_DIR)/$(APP_NAME)"
 	@echo "#!/bin/bash" > "$(ARCHIVE_DIR)/install.sh"
 	@echo "# Install script for $(PROGRAM_NAME) v$(VERSION)" >> "$(ARCHIVE_DIR)/install.sh"
 	@echo "set -e" >> "$(ARCHIVE_DIR)/install.sh"
