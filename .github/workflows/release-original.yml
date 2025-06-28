@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Cache Swift packages
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-swift-
+    
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+    
+    - name: Build full release
+      run: make release
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          releases/*.zip
+          releases/*.pkg
+        name: Release v${{ steps.version.outputs.VERSION }}
+        body: |
+          ## Transcriber v${{ steps.version.outputs.VERSION }}
+          
+          ### 📦 Download & Installation
+          
+          **🚀 Recommended: macOS Installer Package**
+          1. Download `Transcriber-${{ steps.version.outputs.VERSION }}.pkg`
+          2. Double-click to run the installer
+          3. Follow the installation wizard
+          4. Includes both GUI app and CLI tool with proper permissions
+          
+          **⚡ Quick Install (ZIP):**
+          1. Download `transcriber-${{ steps.version.outputs.VERSION }}.zip`
+          2. Extract the zip file
+          3. Run `./install.sh` to install system-wide
+          
+          **🔧 Manual Install:**
+          ```bash
+          sudo cp transcriber /usr/local/bin/
+          ```
+          
+          ### 📋 What's Included
+          
+          **📦 macOS Installer (.pkg):**
+          - `Transcriber.app` - Native macOS application with GUI
+          - `transcriber` - CLI tool for automation and scripting
+          - Automatic permissions setup and code signing
+          - Professional installation experience with progress feedback
+          - Silent installation support for enterprise deployment
+          - Built-in uninstaller (`uninstall-transcriber`)
+          
+          **📁 ZIP Archive (.zip):**
+          - `transcriber` - The main CLI binary (signed with Speech Recognition entitlements)
+          - `transcriber.entitlements` - Required entitlements file
+          - `install.sh` - Automated installation script
+          - `README.md` - Documentation
+          
+          ### ✨ Usage
+          
+          ```bash
+          transcriber --help
+          transcriber audio.mp3
+          transcriber --list-languages
+          ```
+          
+          ### 🆕 New Installer Features
+          
+          - **Disk Space Validation** - Pre-installation space checks with user-friendly error messages
+          - **Component Selection** - Choose between GUI app and/or CLI tool installation
+          - **Silent Installation** - Enterprise deployment support with `install-silently.sh`
+          - **Enhanced Progress Feedback** - Detailed installation progress with verification
+          - **Automatic Uninstaller** - Clean removal with `sudo uninstall-transcriber`
+          
+          **Requirements:** macOS 13.0+ with Speech Recognition framework
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
