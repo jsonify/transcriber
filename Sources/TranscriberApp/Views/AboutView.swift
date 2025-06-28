@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
