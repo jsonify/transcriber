@@ -339,13 +339,14 @@ version-info: version
 .PHONY: update-version-file
 update-version-file:
 	@echo "📝 Updating VERSION file to match git tag..."
-	@if [ -z "$(GIT_VERSION)" ]; then \
+	@LATEST_TAG=$$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$$' | sort -V | tail -n1 | sed 's/^v//' 2>/dev/null); \
+	if [ -z "$$LATEST_TAG" ]; then \
 		echo "❌ No git tags found - cannot update VERSION file"; \
-		echo "Create a git tag first: git tag v<version>"; \
+		echo "   Create a git tag first: git tag v<version>"; \
 		exit 1; \
-	fi
-	@echo "$(GIT_VERSION)" > $(VERSION_FILE)
-	@echo "✅ VERSION file updated to $(GIT_VERSION)"
+	fi; \
+	echo "$$LATEST_TAG" > $(VERSION_FILE); \
+	echo "✅ VERSION file updated to $$LATEST_TAG"
 
 .PHONY: tag
 tag:
