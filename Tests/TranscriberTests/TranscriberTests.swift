@@ -386,8 +386,16 @@ final class TranscriberTests: XCTestCase {
             
             XCTAssertFalse(trimmedVersion.isEmpty, "VERSION file should not be empty")
             XCTAssertTrue(trimmedVersion.matches(#"^\d+\.\d+\.\d+$"#), 
-                          "VERSION file should contain semantic version format (e.g., 2.1.3)")
-            XCTAssertEqual(trimmedVersion, "2.1.3", "VERSION file should contain current version")
+                          "VERSION file should contain semantic version format (e.g., 2.2.0)")
+            
+            // Verify it's a valid semantic version (don't hardcode specific version)
+            let versionComponents = trimmedVersion.split(separator: ".")
+            XCTAssertEqual(versionComponents.count, 3, "VERSION should have exactly 3 components (major.minor.patch)")
+            
+            // Verify each component is a valid number
+            for component in versionComponents {
+                XCTAssertNotNil(Int(component), "Each version component should be a valid number")
+            }
             
         } catch {
             XCTFail("Failed to read VERSION file: \(error)")
