@@ -6,7 +6,8 @@ PROGRAM_NAME := transcriber
 APP_NAME := TranscriberApp
 # Version management with VERSION file fallback
 VERSION_FILE := VERSION
-GIT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+# Only consider semantic version tags (v1.2.3 format, no suffixes)
+GIT_VERSION := $(shell git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$$' | sort -V | tail -n1 | sed 's/^v//' 2>/dev/null)
 FILE_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null | tr -d '\n' || echo "")
 
 # Use git tag if available, otherwise fall back to VERSION file with warning
