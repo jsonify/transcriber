@@ -87,7 +87,7 @@ public struct TranscriberConfiguration: Codable {
         
         do {
             let data = try encoder.encode(sampleConfig)
-            let jsonString = String(data: data, encoding: .utf8) ?? ""
+            _ = String(data: data, encoding: .utf8) ?? ""
             
             return """
             {
