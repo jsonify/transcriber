@@ -66,7 +66,7 @@ clean:
 
 # Release targets
 .PHONY: release
-release: clean build-release-all sign-all test-release archive
+release: clean build-release-all sign-all test-release archive installer
 
 .PHONY: release-cli
 release-cli: clean build-release-cli sign test-release archive-cli
