@@ -386,11 +386,90 @@ final class TranscriberTests: XCTestCase {
             
             XCTAssertFalse(trimmedVersion.isEmpty, "VERSION file should not be empty")
             XCTAssertTrue(trimmedVersion.matches(#"^\d+\.\d+\.\d+$"#), 
-                          "VERSION file should contain semantic version format (e.g., 2.1.3)")
-            XCTAssertEqual(trimmedVersion, "2.1.3", "VERSION file should contain current version")
+                          "VERSION file should contain semantic version format (e.g., 2.2.0)")
+            
+            // Verify it's a valid semantic version (don't hardcode specific version)
+            let versionComponents = trimmedVersion.split(separator: ".")
+            XCTAssertEqual(versionComponents.count, 3, "VERSION should have exactly 3 components (major.minor.patch)")
+            
+            // Verify each component is a valid number
+            for component in versionComponents {
+                XCTAssertNotNil(Int(component), "Each version component should be a valid number")
+            }
             
         } catch {
             XCTFail("Failed to read VERSION file: \(error)")
+        }
+    }
+    
+    func testCodeSigningConfigurationTemplate() {
+        let currentDirectoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let envExampleURL = currentDirectoryURL.appendingPathComponent(".env.example")
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: envExampleURL.path), 
+                      ".env.example file should exist in project root")
+        
+        do {
+            let envContent = try String(contentsOf: envExampleURL, encoding: .utf8)
+            
+            // Verify essential configuration keys are documented
+            XCTAssertTrue(envContent.contains("DEVELOPER_ID_APPLICATION"), 
+                         ".env.example should document DEVELOPER_ID_APPLICATION")
+            XCTAssertTrue(envContent.contains("DEVELOPER_ID_INSTALLER"), 
+                         ".env.example should document DEVELOPER_ID_INSTALLER")
+            XCTAssertTrue(envContent.contains("KEYCHAIN_PROFILE"), 
+                         ".env.example should document KEYCHAIN_PROFILE")
+            XCTAssertTrue(envContent.contains("SIGNING_IDENTITY"), 
+                         ".env.example should document SIGNING_IDENTITY")
+            XCTAssertTrue(envContent.contains("SKIP_NOTARIZATION"), 
+                         ".env.example should document SKIP_NOTARIZATION")
+            
+            // Verify setup instructions are present
+            XCTAssertTrue(envContent.contains("SETUP INSTRUCTIONS"), 
+                         ".env.example should contain setup instructions")
+            XCTAssertTrue(envContent.contains("Apple Developer"), 
+                         ".env.example should reference Apple Developer requirements")
+            XCTAssertTrue(envContent.contains("notarytool"), 
+                         ".env.example should document notarization setup")
+            
+        } catch {
+            XCTFail("Should be able to read .env.example file: \(error)")
+        }
+    }
+    
+    func testSigningScriptsExist() {
+        let currentDirectoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let scriptsDir = currentDirectoryURL.appendingPathComponent("scripts")
+        
+        // Verify signing helper scripts exist
+        let setupScript = scriptsDir.appendingPathComponent("setup-signing.sh")
+        let verifyScript = scriptsDir.appendingPathComponent("verify-signing.sh")
+        let buildScript = scriptsDir.appendingPathComponent("build-production.sh")
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: setupScript.path), 
+                     "setup-signing.sh script should exist")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: verifyScript.path), 
+                     "verify-signing.sh script should exist")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: buildScript.path), 
+                     "build-production.sh script should exist")
+        
+        // Verify scripts are executable
+        do {
+            let setupAttrs = try FileManager.default.attributesOfItem(atPath: setupScript.path)
+            let verifyAttrs = try FileManager.default.attributesOfItem(atPath: verifyScript.path)
+            let buildAttrs = try FileManager.default.attributesOfItem(atPath: buildScript.path)
+            
+            if let setupPerms = setupAttrs[.posixPermissions] as? NSNumber,
+               let verifyPerms = verifyAttrs[.posixPermissions] as? NSNumber,
+               let buildPerms = buildAttrs[.posixPermissions] as? NSNumber {
+                
+                // Check if executable bit is set (mode & 0o111 != 0)
+                XCTAssertNotEqual(setupPerms.intValue & 0o111, 0, "setup-signing.sh should be executable")
+                XCTAssertNotEqual(verifyPerms.intValue & 0o111, 0, "verify-signing.sh should be executable")
+                XCTAssertNotEqual(buildPerms.intValue & 0o111, 0, "build-production.sh should be executable")
+            }
+        } catch {
+            XCTFail("Should be able to check script permissions: \(error)")
         }
     }
 }

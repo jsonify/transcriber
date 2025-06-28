@@ -20,3 +20,6 @@ installer/build/
 
 # Screenshots
 CleanShot*.png
+
+# Environment configuration with secrets
+.env

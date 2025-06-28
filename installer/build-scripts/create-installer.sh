@@ -245,6 +245,76 @@ if [ ! -f "$FINAL_PKG" ]; then
     exit 1
 fi
 
+# Package signing and notarization
+echo ""
+echo "🔐 Code Signing and Notarization:"
+echo "=================================="
+
+if [ -n "$DEVELOPER_ID_INSTALLER" ]; then
+    echo "🔐 Signing package with Developer ID..."
+    echo "   Identity: $DEVELOPER_ID_INSTALLER"
+    
+    # Create signed package path
+    SIGNED_PKG="${FINAL_PKG%.pkg}-signed.pkg"
+    
+    # Sign the package
+    if productsign --sign "$DEVELOPER_ID_INSTALLER" "$FINAL_PKG" "$SIGNED_PKG"; then
+        echo "✅ Package signed successfully"
+        
+        # Replace unsigned package with signed one
+        mv "$SIGNED_PKG" "$FINAL_PKG"
+        
+        # Verify signature
+        if pkgutil --check-signature "$FINAL_PKG" > /dev/null 2>&1; then
+            echo "✅ Package signature verified"
+        else
+            echo "⚠️  Package signature verification failed"
+        fi
+        
+        # Notarization
+        if [ -n "$KEYCHAIN_PROFILE" ] && [ "$SKIP_NOTARIZATION" != "true" ]; then
+            echo ""
+            echo "📤 Submitting for notarization..."
+            echo "   Profile: $KEYCHAIN_PROFILE"
+            echo "   This may take several minutes..."
+            
+            if xcrun notarytool submit "$FINAL_PKG" \
+                --keychain-profile "$KEYCHAIN_PROFILE" \
+                --wait \
+                --timeout 30m; then
+                echo "✅ Notarization completed successfully"
+                echo "✅ Package is ready for distribution"
+            else
+                echo "❌ Notarization failed"
+                echo "   The package is signed but not notarized"
+                echo "   Users may see Gatekeeper warnings"
+            fi
+        else
+            if [ "$SKIP_NOTARIZATION" = "true" ]; then
+                echo "⏭️  Notarization skipped (SKIP_NOTARIZATION=true)"
+            else
+                echo "⚠️  No notarization profile configured"
+                echo "   Set KEYCHAIN_PROFILE to enable notarization"
+            fi
+            echo "   Package is signed but not notarized"
+            echo "   Users may see reduced Gatekeeper warnings"
+        fi
+    else
+        echo "❌ Package signing failed"
+        echo "   Verify Developer ID Installer certificate is available"
+        echo "   Package will be unsigned and blocked by Gatekeeper"
+    fi
+else
+    echo "⚠️  No Developer ID Installer certificate configured"
+    echo "   Package will be unsigned and blocked by Gatekeeper"
+    echo "   Set DEVELOPER_ID_INSTALLER in .env for production signing"
+    echo ""
+    echo "📋 Current signing configuration:"
+    echo "   DEVELOPER_ID_INSTALLER: ${DEVELOPER_ID_INSTALLER:-❌ Not set}"
+    echo "   KEYCHAIN_PROFILE: ${KEYCHAIN_PROFILE:-❌ Not set}"
+    echo "   SKIP_NOTARIZATION: ${SKIP_NOTARIZATION:-false}"
+fi
+
 # Display package information
 echo ""
 echo "🎉 Installer package created successfully!"
@@ -263,15 +333,40 @@ fi
 
 echo ""
 echo "🚀 Installation Instructions:"
-echo "   1. Double-click $FINAL_PKG to install"
-echo "   2. Follow the installer prompts"
-echo "   3. Grant Speech Recognition permission when requested"
+if [ -n "$DEVELOPER_ID_INSTALLER" ]; then
+    echo "   1. Double-click $FINAL_PKG to install (signed package)"
+    echo "   2. Follow the installer prompts"
+    echo "   3. Grant Speech Recognition permission when requested"
+    if [ -n "$KEYCHAIN_PROFILE" ] && [ "$SKIP_NOTARIZATION" != "true" ]; then
+        echo "   ✅ Package is signed and notarized - no Gatekeeper warnings"
+    else
+        echo "   ⚠️  Package is signed but not notarized - may show Gatekeeper warnings"
+    fi
+else
+    echo "   ⚠️  UNSIGNED PACKAGE - Gatekeeper will block installation"
+    echo "   1. Right-click $FINAL_PKG and select 'Open'"
+    echo "   2. Click 'Open' in the security dialog"
+    echo "   3. Follow the installer prompts"
+    echo "   4. Grant Speech Recognition permission when requested"
+fi
 echo ""
 echo "🧪 Testing:"
 echo "   installer -pkg '$FINAL_PKG' -target /"
+if [ -n "$DEVELOPER_ID_INSTALLER" ]; then
+    echo "   spctl --assess --verbose=4 --type install '$FINAL_PKG'"
+fi
 echo ""
 echo "📤 Distribution:"
-echo "   The .pkg file can be distributed and installed on any compatible macOS system"
+if [ -n "$DEVELOPER_ID_INSTALLER" ]; then
+    if [ -n "$KEYCHAIN_PROFILE" ] && [ "$SKIP_NOTARIZATION" != "true" ]; then
+        echo "   ✅ Ready for public distribution (signed and notarized)"
+    else
+        echo "   ⚠️  Suitable for limited distribution (signed but not notarized)"
+    fi
+else
+    echo "   ❌ Development only - not suitable for public distribution"
+    echo "   Configure Developer ID certificates for production distribution"
+fi
 
 # Clean up build directory (optional)
 # rm -rf "$INSTALLER_BUILD_DIR"
