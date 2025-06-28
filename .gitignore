@@ -11,3 +11,12 @@ CLAUDE.md
 .claude/settings.local.json
 /scratchpad
 Package.resolved
+
+# Release builds and installer artifacts  
+releases/
+installer/build/
+*.pkg
+*.zip
+
+# Screenshots
+CleanShot*.png
