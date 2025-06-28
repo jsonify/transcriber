@@ -19,6 +19,9 @@
     <!-- Volume check -->
     <volume-check script="pm_volume_check();"/>
     
+    <!-- Disk space check -->
+    <volume-check script="pm_disk_space_check();"/>
+    
     <!-- Define the choices outline -->
     <choices-outline>
         <line choice="default">
@@ -62,6 +65,35 @@
                 return false;
             }
             return true;
+        }
+        
+        function pm_disk_space_check() {
+            // Required space: ~50MB for app bundle + CLI tool + overhead
+            var requiredSpaceBytes = 52428800; // 50MB in bytes
+            var targetVolume = my.target.mountpoint;
+            
+            try {
+                var availableSpace = system.files.freeSpaceAtPath(targetVolume);
+                
+                if (availableSpace < requiredSpaceBytes) {
+                    var requiredMB = Math.ceil(requiredSpaceBytes / 1048576);
+                    var availableMB = Math.floor(availableSpace / 1048576);
+                    
+                    my.result.title = 'Insufficient Disk Space';
+                    my.result.message = 'Transcriber requires at least ' + requiredMB + 'MB of free space. ' +
+                                      'Available space: ' + availableMB + 'MB. ' +
+                                      'Please free up some disk space and try again.';
+                    my.result.type = 'Fatal';
+                    return false;
+                }
+                
+                return true;
+            } catch (error) {
+                // If we can't check disk space, allow installation to proceed
+                // but log the warning
+                system.log('Warning: Could not check disk space: ' + error);
+                return true;
+            }
         }
     </script>
 </installer-gui-script>
