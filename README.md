@@ -33,6 +33,79 @@ sudo cp .build/release/transcriber /usr/local/bin/
 - macOS 13.0 or later
 - Speech recognition permissions (granted on first use)
 
+### Package Installer (Recommended)
+
+For easy installation and distribution, use the macOS installer package:
+
+```bash
+# Create installer package (development - unsigned)
+make installer
+
+# Create production installer (signed and notarized)
+make installer-production
+```
+
+The installer package includes both the CLI tool and native macOS application, and automatically handles permissions and setup.
+
+**Note**: Production installers require Developer ID certificates. See [Code Signing](#code-signing) section below.
+
+## Code Signing
+
+For production distribution and to avoid macOS Gatekeeper warnings, you can configure code signing with Developer ID certificates.
+
+### Quick Setup
+
+```bash
+# Interactive setup wizard
+scripts/setup-signing.sh
+
+# Verify configuration
+scripts/verify-signing.sh
+
+# Build production package
+scripts/build-production.sh
+```
+
+### Manual Configuration
+
+1. **Obtain Developer ID certificates** from Apple Developer Portal
+2. **Create `.env` file** (copy from `.env.example`)
+3. **Configure environment variables**:
+
+```bash
+# Developer ID certificates
+DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)"
+DEVELOPER_ID_INSTALLER="Developer ID Installer: Your Name (TEAMID)"
+
+# Notarization keychain profile
+KEYCHAIN_PROFILE="your-profile-name"
+```
+
+4. **Set up notarization profile**:
+
+```bash
+xcrun notarytool store-credentials "your-profile-name" \
+    --apple-id your@email.com \
+    --team-id YOUR_TEAM_ID
+```
+
+### Code Signing Commands
+
+```bash
+# Check signing configuration
+make check-signing-environment
+
+# Verify certificates
+make verify-certificates
+
+# Build with production signing
+make installer-production
+```
+
+**Signing Modes:**
+- **Development**: Ad-hoc signatures (default, Gatekeeper warnings)
+- **Production**: Developer ID signatures (no Gatekeeper warnings)
+
 ## Usage
 
 ### Basic Usage
