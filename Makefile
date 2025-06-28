@@ -28,6 +28,19 @@ ARCHIVE_DIR := $(RELEASE_DIR)/$(PROGRAM_NAME)-$(VERSION)
 SWIFT_BUILD_FLAGS := -c release --disable-sandbox
 ENTITLEMENTS_FILE := transcriber.entitlements
 
+# Code Signing Configuration
+# Load from environment variables or use defaults
+DEVELOPER_ID_APPLICATION ?= 
+DEVELOPER_ID_INSTALLER ?= 
+SIGNING_IDENTITY ?= -
+KEYCHAIN_PROFILE ?= 
+SKIP_NOTARIZATION ?= false
+
+# Determine signing mode based on available certificates
+SIGNING_MODE := $(if $(DEVELOPER_ID_APPLICATION),production,development)
+CLI_SIGN_IDENTITY := $(if $(DEVELOPER_ID_APPLICATION),$(DEVELOPER_ID_APPLICATION),$(SIGNING_IDENTITY))
+APP_SIGN_IDENTITY := $(if $(DEVELOPER_ID_APPLICATION),$(DEVELOPER_ID_APPLICATION),$(SIGNING_IDENTITY))
+
 # Derived Paths
 ARCHIVE_BINARY := $(ARCHIVE_DIR)/$(PROGRAM_NAME)
 ARCHIVE_APP := $(ARCHIVE_DIR)/$(APP_NAME).app
@@ -122,16 +135,21 @@ build-release: build-release-cli
 
 .PHONY: sign
 sign: build-release-cli
-	@echo "🔐 Code signing CLI with Speech Recognition entitlements..."
+	@echo "🔐 Code signing CLI with Speech Recognition entitlements ($(SIGNING_MODE) mode)..."
 	@if [ ! -f "$(ENTITLEMENTS_FILE)" ]; then \
 		echo "❌ Entitlements file not found: $(ENTITLEMENTS_FILE)"; \
 		exit 1; \
+	fi
+	@if [ "$(SIGNING_MODE)" = "production" ]; then \
+		echo "   Using Developer ID: $(CLI_SIGN_IDENTITY)"; \
+	else \
+		echo "   Using ad-hoc signature (development mode)"; \
 	fi
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
 	codesign --remove-signature "$$BINARY_PATH" 2>/dev/null || true; \
 	codesign --force \
-	         --sign - \
+	         --sign "$(CLI_SIGN_IDENTITY)" \
 	         --entitlements "$(ENTITLEMENTS_FILE)" \
 	         --options runtime \
 	         "$$BINARY_PATH"
@@ -139,16 +157,21 @@ sign: build-release-cli
 
 .PHONY: sign-app
 sign-app: build-release-app
-	@echo "🔐 Code signing App with Speech Recognition entitlements..."
+	@echo "🔐 Code signing App with Speech Recognition entitlements ($(SIGNING_MODE) mode)..."
 	@if [ ! -f "$(ENTITLEMENTS_FILE)" ]; then \
 		echo "❌ Entitlements file not found: $(ENTITLEMENTS_FILE)"; \
 		exit 1; \
+	fi
+	@if [ "$(SIGNING_MODE)" = "production" ]; then \
+		echo "   Using Developer ID: $(APP_SIGN_IDENTITY)"; \
+	else \
+		echo "   Using ad-hoc signature (development mode)"; \
 	fi
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(APP_NAME)"; \
 	codesign --remove-signature "$$BINARY_PATH" 2>/dev/null || true; \
 	codesign --force \
-	         --sign - \
+	         --sign "$(APP_SIGN_IDENTITY)" \
 	         --entitlements "$(ENTITLEMENTS_FILE)" \
 	         --options runtime \
 	         "$$BINARY_PATH"
@@ -166,6 +189,52 @@ verify: sign
 	codesign -v "$$BINARY_PATH"; \
 	codesign -d --entitlements - "$$BINARY_PATH" > /dev/null 2>&1
 	@echo "✅ Signature verification complete"
+
+# Certificate verification and management
+.PHONY: verify-certificates
+verify-certificates:
+	@echo "🔍 Verifying code signing certificates..."
+	@echo "   Signing mode: $(SIGNING_MODE)"
+	@if [ "$(SIGNING_MODE)" = "production" ]; then \
+		echo "   Developer ID Application: $(DEVELOPER_ID_APPLICATION)"; \
+		echo "   Developer ID Installer: $(if $(DEVELOPER_ID_INSTALLER),$(DEVELOPER_ID_INSTALLER),❌ Not configured)"; \
+		echo "   Keychain profile: $(if $(KEYCHAIN_PROFILE),$(KEYCHAIN_PROFILE),❌ Not configured)"; \
+		echo ""; \
+		echo "🔍 Checking certificate availability..."; \
+		if security find-identity -v -p codesigning | grep -q "$(DEVELOPER_ID_APPLICATION)"; then \
+			echo "✅ Developer ID Application certificate found"; \
+		else \
+			echo "❌ Developer ID Application certificate not found in keychain"; \
+		fi; \
+		if [ -n "$(DEVELOPER_ID_INSTALLER)" ]; then \
+			if security find-identity -v -p codesigning | grep -q "$(DEVELOPER_ID_INSTALLER)"; then \
+				echo "✅ Developer ID Installer certificate found"; \
+			else \
+				echo "❌ Developer ID Installer certificate not found in keychain"; \
+			fi; \
+		fi; \
+	else \
+		echo "   Using ad-hoc signatures (development mode)"; \
+		echo "   💡 Set DEVELOPER_ID_APPLICATION to enable production signing"; \
+	fi
+
+.PHONY: check-signing-environment
+check-signing-environment: verify-certificates
+	@echo ""
+	@echo "📋 Code Signing Environment Summary:"
+	@echo "   Project: $(PROGRAM_NAME) v$(VERSION)"
+	@echo "   Mode: $(SIGNING_MODE)"
+	@echo "   CLI identity: $(CLI_SIGN_IDENTITY)"
+	@echo "   App identity: $(APP_SIGN_IDENTITY)"
+	@echo "   Installer identity: $(if $(DEVELOPER_ID_INSTALLER),$(DEVELOPER_ID_INSTALLER),❌ Not configured)"
+	@echo "   Notarization: $(if $(KEYCHAIN_PROFILE),Enabled ($(KEYCHAIN_PROFILE)),❌ Disabled)"
+	@echo ""
+	@if [ "$(SIGNING_MODE)" = "production" ]; then \
+		echo "✅ Ready for production signing and distribution"; \
+	else \
+		echo "⚠️  Development mode - packages will not pass Gatekeeper"; \
+		echo "   Set environment variables in .env to enable production signing"; \
+	fi
 
 .PHONY: test-release
 test-release: verify
@@ -311,9 +380,14 @@ info:
 	@echo "   make release-cli - Release build CLI only"
 	@echo "   make release-app - Release build App only"
 	@echo "   make installer   - Create macOS installer package (.pkg)"
+	@echo "   make installer-production - Create signed installer (requires .env)"
 	@echo "   make install     - Install CLI to /usr/local/bin"
 	@echo "   make clean       - Clean build artifacts"
 	@echo "   make info        - Show this information"
+	@echo ""
+	@echo "🔐 Code Signing Commands:"
+	@echo "   make verify-certificates - Check Developer ID certificates"
+	@echo "   make check-signing-environment - Show signing configuration"
 
 .PHONY: size
 size: build-release
@@ -336,6 +410,18 @@ build-app-bundle: build-release-app sign-app
 create-installer: build-release-all sign-all
 	@echo "📦 Creating macOS installer package..."
 	$(INSTALLER_DIR)/build-scripts/create-installer.sh
+
+.PHONY: installer-production
+installer-production: check-signing-environment build-app-bundle create-installer
+	@echo "🎁 Production installer created with code signing"
+	@if [ "$(SIGNING_MODE)" = "production" ]; then \
+		echo "✅ Package signed with Developer ID and ready for distribution"; \
+		echo "   Location: $(INSTALLER_PKG)"; \
+		echo "   Test installation: sudo installer -pkg '$(INSTALLER_PKG)' -target /"; \
+	else \
+		echo "⚠️  Development package created - will be blocked by Gatekeeper"; \
+		echo "   Set DEVELOPER_ID_INSTALLER in .env for production signing"; \
+	fi
 
 .PHONY: installer-clean
 installer-clean:
