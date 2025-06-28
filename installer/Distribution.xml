@@ -19,6 +19,9 @@
     <!-- Volume check -->
     <volume-check script="pm_volume_check();"/>
     
+    <!-- Disk space check -->
+    <volume-check script="pm_disk_space_check();"/>
+    
     <!-- Define the choices outline -->
     <choices-outline>
         <line choice="default">
@@ -29,10 +32,10 @@
     
     <!-- Define the choices -->
     <choice id="default"/>
-    <choice id="com.transcriber.app" visible="false">
+    <choice id="com.transcriber.app" visible="true" title="Transcriber Application" description="Install the Transcriber application to /Applications" start_selected="true" enabled="true">
         <pkg-ref id="com.transcriber.app"/>
     </choice>
-    <choice id="com.transcriber.cli" visible="true" title="Command Line Tools" description="Install the transcriber command-line interface" start_selected="true">
+    <choice id="com.transcriber.cli" visible="true" title="Command Line Tools" description="Install the transcriber command-line interface to /usr/local/bin" start_selected="true" enabled="true">
         <pkg-ref id="com.transcriber.cli"/>
     </choice>
     
@@ -45,7 +48,7 @@
     <!-- JavaScript functions -->
     <script>
         function pm_install_check() {
-            if (!(system.compareVersions(system.version.ProductVersion, '13.0') >= 0)) {
+            if (!(system.compareVersions(system.version.ProductVersion, '13.0') &gt;= 0)) {
                 my.result.title = 'macOS Version Too Old';
                 my.result.message = 'This application requires macOS 13.0 or later.';
                 my.result.type = 'Fatal';
@@ -62,6 +65,35 @@
                 return false;
             }
             return true;
+        }
+        
+        function pm_disk_space_check() {
+            // Required space: ~50MB for app bundle + CLI tool + overhead
+            var requiredSpaceBytes = 52428800; // 50MB in bytes
+            var targetVolume = my.target.mountpoint;
+            
+            try {
+                var availableSpace = system.files.freeSpaceAtPath(targetVolume);
+                
+                if (availableSpace &lt; requiredSpaceBytes) {
+                    var requiredMB = Math.ceil(requiredSpaceBytes / 1048576);
+                    var availableMB = Math.floor(availableSpace / 1048576);
+                    
+                    my.result.title = 'Insufficient Disk Space';
+                    my.result.message = 'Transcriber requires at least ' + requiredMB + 'MB of free space. ' +
+                                      'Available space: ' + availableMB + 'MB. ' +
+                                      'Please free up some disk space and try again.';
+                    my.result.type = 'Fatal';
+                    return false;
+                }
+                
+                return true;
+            } catch (error) {
+                // If we can't check disk space, allow installation to proceed
+                // but log the warning
+                system.log('Warning: Could not check disk space: ' + error);
+                return true;
+            }
         }
     </script>
 </installer-gui-script>
