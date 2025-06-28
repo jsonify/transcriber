@@ -11,6 +11,10 @@ let package = Package(
             name: "transcriber",
             targets: ["TranscriberCLI"]
         ),
+        .executable(
+            name: "TranscriberApp",
+            targets: ["TranscriberApp"]
+        ),
         .library(
             name: "TranscriberCore", 
             targets: ["TranscriberCore"]

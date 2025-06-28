@@ -17,6 +17,24 @@
             "name": "Release transcriber",
             "program": "${workspaceFolder:transcriber}/.build/release/transcriber",
             "preLaunchTask": "swift: Build Release transcriber"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:transcriber}",
+            "name": "Debug TranscriberApp",
+            "program": "${workspaceFolder:transcriber}/.build/debug/TranscriberApp",
+            "preLaunchTask": "swift: Build Debug TranscriberApp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:transcriber}",
+            "name": "Release TranscriberApp",
+            "program": "${workspaceFolder:transcriber}/.build/release/TranscriberApp",
+            "preLaunchTask": "swift: Build Release TranscriberApp"
         }
     ]
 }
