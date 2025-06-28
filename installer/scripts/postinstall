@@ -1,0 +1,97 @@
+#!/bin/bash
+
+# Transcriber Post-Install Script
+# This script runs after the main installation
+
+# Exit on any error
+set -e
+
+# Get the target volume
+TARGET_VOLUME="$3"
+INSTALL_LOCATION="${TARGET_VOLUME}/Applications"
+
+echo "Post-install: Finalizing Transcriber installation..."
+
+# Set proper permissions for the app bundle
+if [ -d "$INSTALL_LOCATION/Transcriber.app" ]; then
+    echo "Post-install: Setting permissions for Transcriber.app..."
+    chown -R root:admin "$INSTALL_LOCATION/Transcriber.app"
+    chmod -R 755 "$INSTALL_LOCATION/Transcriber.app"
+    
+    # Set executable bit on the main binary
+    if [ -f "$INSTALL_LOCATION/Transcriber.app/Contents/MacOS/TranscriberApp" ]; then
+        chmod +x "$INSTALL_LOCATION/Transcriber.app/Contents/MacOS/TranscriberApp"
+        echo "Post-install: Set executable permissions on app binary"
+    fi
+fi
+
+# Set proper permissions for CLI tool
+if [ -f "/usr/local/bin/transcriber" ]; then
+    echo "Post-install: Setting permissions for CLI tool..."
+    chown root:admin "/usr/local/bin/transcriber"
+    chmod 755 "/usr/local/bin/transcriber"
+fi
+
+# Add /usr/local/bin to PATH if not already there (for the current user)
+USER_HOME=$(eval echo ~${SUDO_USER})
+if [ -n "$SUDO_USER" ] && [ -d "$USER_HOME" ]; then
+    SHELL_RC=""
+    if [ -f "$USER_HOME/.zshrc" ]; then
+        SHELL_RC="$USER_HOME/.zshrc"
+    elif [ -f "$USER_HOME/.bash_profile" ]; then
+        SHELL_RC="$USER_HOME/.bash_profile"
+    elif [ -f "$USER_HOME/.bashrc" ]; then
+        SHELL_RC="$USER_HOME/.bashrc"
+    fi
+    
+    if [ -n "$SHELL_RC" ]; then
+        if ! grep -q '/usr/local/bin' "$SHELL_RC"; then
+            echo 'export PATH="/usr/local/bin:$PATH"' >> "$SHELL_RC"
+            echo "Post-install: Added /usr/local/bin to PATH in $SHELL_RC"
+        fi
+    fi
+fi
+
+# Register the app with Launch Services
+if [ -d "$INSTALL_LOCATION/Transcriber.app" ]; then
+    echo "Post-install: Registering app with Launch Services..."
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -v -f "$INSTALL_LOCATION/Transcriber.app" || true
+fi
+
+# Create uninstall script
+UNINSTALL_SCRIPT="/usr/local/bin/uninstall-transcriber"
+cat > "$UNINSTALL_SCRIPT" << 'EOF'
+#!/bin/bash
+
+echo "Uninstalling Transcriber..."
+
+# Remove app bundle
+if [ -d "/Applications/Transcriber.app" ]; then
+    rm -rf "/Applications/Transcriber.app"
+    echo "Removed Transcriber.app"
+fi
+
+# Remove CLI tool
+if [ -f "/usr/local/bin/transcriber" ]; then
+    rm -f "/usr/local/bin/transcriber"
+    echo "Removed CLI tool"
+fi
+
+# Remove this uninstall script
+rm -f "/usr/local/bin/uninstall-transcriber"
+
+echo "Transcriber has been completely uninstalled."
+EOF
+
+chmod +x "$UNINSTALL_SCRIPT"
+echo "Post-install: Created uninstall script at $UNINSTALL_SCRIPT"
+
+echo "Post-install: Installation complete!"
+echo ""
+echo "Transcriber has been installed successfully."
+echo "• GUI App: Available in Applications folder"
+echo "• CLI Tool: 'transcriber' command available in Terminal"
+echo "• To uninstall: Run 'sudo uninstall-transcriber'"
+echo ""
+
+exit 0
