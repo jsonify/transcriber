@@ -4,24 +4,6 @@ import TranscriberCore
 import UserNotifications
 import AVFoundation
 
-enum FileStatus {
-    case pending
-    case processing
-    case done
-    case error
-}
-
-struct FileItem: Identifiable, Equatable {
-    let id = UUID()
-    let url: URL
-    var status: FileStatus = .pending
-    var duration: String = ""
-    var progress: Double = 0.0
-    
-    static func == (lhs: FileItem, rhs: FileItem) -> Bool {
-        lhs.url == rhs.url
-    }
-}
 
 @MainActor
 class AppDelegate: ObservableObject {

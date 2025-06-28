@@ -1,4 +1,5 @@
 import SwiftUI
+import TranscriberCore
 
 struct FileListItemView: View {
     let fileItem: FileItem
