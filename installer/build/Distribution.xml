@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Transcriber</title>
+    <organization>com.transcriber</organization>
+    <domains enable_anywhere="true"/>
+    <options customize="never" require-scripts="false" rootVolumeOnly="true" hostArchitectures="arm64,x86_64"/>
+    
+    <!-- Define installer UI -->
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <readme file="readme.html" mime-type="text/html"/>
+    <background file="background.png" mime-type="image/png" alignment="topleft" scaling="proportional"/>
+    
+    <!-- License -->
+    <license file="license.txt" mime-type="text/plain"/>
+    
+    <!-- Installation check -->
+    <installation-check script="pm_install_check();"/>
+    
+    <!-- Volume check -->
+    <volume-check script="pm_volume_check();"/>
+    
+    <!-- Define the choices outline -->
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.transcriber.app"/>
+            <line choice="com.transcriber.cli"/>
+        </line>
+    </choices-outline>
+    
+    <!-- Define the choices -->
+    <choice id="default"/>
+    <choice id="com.transcriber.app" visible="false">
+        <pkg-ref id="com.transcriber.app"/>
+    </choice>
+    <choice id="com.transcriber.cli" visible="true" title="Command Line Tools" description="Install the transcriber command-line interface" start_selected="true">
+        <pkg-ref id="com.transcriber.cli"/>
+    </choice>
+    
+    <!-- Define package references -->
+    <pkg-ref id="com.transcriber.app" version="1.0.1" onConclusion="none">TranscriberApp.pkg</pkg-ref>
+    <pkg-ref id="com.transcriber.cli" version="1.0.1" onConclusion="none">TranscriberCLI.pkg</pkg-ref>
+    
+    <product id="com.transcriber" version="1.0.1"/>
+    
+    <!-- JavaScript functions -->
+    <script>
+        function pm_install_check() {
+            if (!(system.compareVersions(system.version.ProductVersion, '13.0') >= 0)) {
+                my.result.title = 'macOS Version Too Old';
+                my.result.message = 'This application requires macOS 13.0 or later.';
+                my.result.type = 'Fatal';
+                return false;
+            }
+            return true;
+        }
+        
+        function pm_volume_check() {
+            if (!system.files.fileExistsAtPath('/Applications')) {
+                my.result.title = 'Invalid Volume';
+                my.result.message = 'This application must be installed on a volume with an Applications folder.';
+                my.result.type = 'Fatal';
+                return false;
+            }
+            return true;
+        }
+    </script>
+</installer-gui-script>

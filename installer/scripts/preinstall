@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# Transcriber Pre-Install Script
+# This script runs before the main installation
+
+# Exit on any error
+set -e
+
+# Get the target volume
+TARGET_VOLUME="$3"
+INSTALL_LOCATION="${TARGET_VOLUME}/Applications"
+
+echo "Pre-install: Starting Transcriber installation preparation..."
+echo "Target volume: $TARGET_VOLUME"
+echo "Install location: $INSTALL_LOCATION"
+
+# Check if we have write permissions to Applications folder
+if [ ! -w "$INSTALL_LOCATION" ]; then
+    echo "Warning: No write permission to $INSTALL_LOCATION"
+    exit 1
+fi
+
+# Remove any existing installation
+if [ -d "$INSTALL_LOCATION/Transcriber.app" ]; then
+    echo "Pre-install: Removing existing Transcriber.app..."
+    rm -rf "$INSTALL_LOCATION/Transcriber.app"
+fi
+
+# Remove any existing CLI installation
+if [ -f "/usr/local/bin/transcriber" ]; then
+    echo "Pre-install: Removing existing CLI installation..."
+    rm -f "/usr/local/bin/transcriber"
+fi
+
+# Create /usr/local/bin if it doesn't exist
+if [ ! -d "/usr/local/bin" ]; then
+    echo "Pre-install: Creating /usr/local/bin directory..."
+    mkdir -p "/usr/local/bin"
+fi
+
+echo "Pre-install: Preparation complete"
+exit 0

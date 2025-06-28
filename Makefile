@@ -23,6 +23,10 @@ ARCHIVE_BINARY := $(ARCHIVE_DIR)/$(PROGRAM_NAME)
 ARCHIVE_APP := $(ARCHIVE_DIR)/$(APP_NAME).app
 ARCHIVE_FILE := $(RELEASE_DIR)/$(PROGRAM_NAME)-$(VERSION).zip
 
+# Installer Paths
+INSTALLER_DIR := installer
+INSTALLER_PKG := $(RELEASE_DIR)/$(PROGRAM_NAME)-$(VERSION).pkg
+
 # Default target
 .PHONY: all
 all: clean build
@@ -276,6 +280,7 @@ info:
 	@echo "   make release     - Full release build (both CLI and App)"
 	@echo "   make release-cli - Release build CLI only"
 	@echo "   make release-app - Release build App only"
+	@echo "   make installer   - Create macOS installer package (.pkg)"
 	@echo "   make install     - Install CLI to /usr/local/bin"
 	@echo "   make clean       - Clean build artifacts"
 	@echo "   make info        - Show this information"
@@ -287,6 +292,26 @@ size: build-release
 	@if [ -f "$(ARCHIVE_FILE)" ]; then \
 		ls -lh "$(ARCHIVE_FILE)" | awk '{print "  Archive size:   " $$5 " (" $$9 ")"}'; \
 	fi
+
+# Installer targets
+.PHONY: installer
+installer: build-app-bundle create-installer
+
+.PHONY: build-app-bundle
+build-app-bundle: build-release-app sign-app
+	@echo "📱 Creating macOS app bundle..."
+	$(INSTALLER_DIR)/build-scripts/build-app-bundle.sh
+
+.PHONY: create-installer
+create-installer: build-release-all sign-all
+	@echo "📦 Creating macOS installer package..."
+	$(INSTALLER_DIR)/build-scripts/create-installer.sh
+
+.PHONY: installer-clean
+installer-clean:
+	@echo "🧹 Cleaning installer build artifacts..."
+	rm -rf $(INSTALLER_DIR)/build
+	rm -f $(INSTALLER_PKG)
 
 # Help target
 .PHONY: help
