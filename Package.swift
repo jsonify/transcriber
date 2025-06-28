@@ -11,6 +11,10 @@ let package = Package(
             name: "transcriber",
             targets: ["TranscriberCLI"]
         ),
+        .library(
+            name: "TranscriberCore", 
+            targets: ["TranscriberCore"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
@@ -22,6 +26,12 @@ let package = Package(
             dependencies: [
                 "TranscriberCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
+        ),
+        .executableTarget(
+            name: "TranscriberApp",
+            dependencies: [
+                "TranscriberCore",
             ]
         ),
         .target(
