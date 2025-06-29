@@ -33,24 +33,46 @@ jobs:
       run: |
         # Find the most recent successful CI run for this commit
         COMMIT_SHA="${{ github.sha }}"
-        echo "Checking for CI artifacts for commit: $COMMIT_SHA"
+        echo "🔍 Checking for CI artifacts for commit: $COMMIT_SHA"
         
-        # Get recent CI runs for main branch
-        CI_RUN=$(gh run list \
+        # Get recent successful CI runs for main branch
+        echo "📋 Searching recent CI runs..."
+        CI_RUNS=$(gh run list \
           --workflow=ci.yml \
           --branch=main \
           --status=success \
           --limit=10 \
-          --json=conclusion,headSha,databaseId,url | \
-          jq -r ".[] | select(.headSha == \"$COMMIT_SHA\" and .conclusion == \"success\") | .databaseId" | \
-          head -1)
+          --json=conclusion,headSha,databaseId,url,displayTitle,createdAt 2>/dev/null || echo "[]")
         
-        if [ -n "$CI_RUN" ]; then
-          echo "Found CI run: $CI_RUN"
-          echo "available=true" >> $GITHUB_OUTPUT
-          echo "run-id=$CI_RUN" >> $GITHUB_OUTPUT
+        if [ "$CI_RUNS" = "[]" ] || [ -z "$CI_RUNS" ]; then
+          echo "⚠️  No recent CI runs found"
+          echo "available=false" >> $GITHUB_OUTPUT
+          echo "run-id=" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        echo "📊 Recent CI runs:"
+        echo "$CI_RUNS" | jq -r '.[] | "  - \(.databaseId): \(.displayTitle) (SHA: \(.headSha[0:7]))"' || true
+        
+        # Look for exact commit match first
+        CI_RUN=$(echo "$CI_RUNS" | jq -r ".[] | select(.headSha == \"$COMMIT_SHA\" and .conclusion == \"success\") | .databaseId" | head -1)
+        
+        if [ -n "$CI_RUN" ] && [ "$CI_RUN" != "null" ]; then
+          echo "✅ Found exact commit match - CI run: $CI_RUN"
+          
+          # Verify the run has artifacts
+          if gh run view $CI_RUN --json artifacts | jq -r '.artifacts[].name' | grep -q "transcriber-release" 2>/dev/null; then
+            echo "✅ CI run has transcriber-release artifacts"
+            echo "available=true" >> $GITHUB_OUTPUT
+            echo "run-id=$CI_RUN" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  CI run found but no transcriber-release artifacts"
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "run-id=" >> $GITHUB_OUTPUT
+          fi
         else
-          echo "No CI artifacts found for this commit"
+          echo "ℹ️  No CI artifacts found for exact commit match"
+          # Could try recent successful runs as fallback, but for now stick to exact match
           echo "available=false" >> $GITHUB_OUTPUT
           echo "run-id=" >> $GITHUB_OUTPUT
         fi
@@ -84,19 +106,48 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        echo "Attempting to download CI artifacts from run ${{ needs.prepare.outputs.ci-run-id }}"
-        if gh run download ${{ needs.prepare.outputs.ci-run-id }} --name transcriber-release --dir ci-artifacts; then
-          echo "✅ Downloaded CI artifacts"
-          if [ -f "ci-artifacts/transcriber-${{ needs.prepare.outputs.version }}.zip" ]; then
-            echo "✅ Found release archive, extracting CLI binary"
-            cd ci-artifacts
-            unzip -q "transcriber-${{ needs.prepare.outputs.version }}.zip"
-            if [ -f "transcriber-${{ needs.prepare.outputs.version }}/transcriber" ]; then
-              mkdir -p ../.build/release
-              cp "transcriber-${{ needs.prepare.outputs.version }}/transcriber" ../.build/release/
-              cp "transcriber-${{ needs.prepare.outputs.version }}/transcriber" ../transcriber-signed
-              echo "✅ CLI binary extracted from CI artifacts"
+        echo "🔍 Attempting to download CI artifacts from run ${{ needs.prepare.outputs.ci-run-id }}"
+        if gh run download ${{ needs.prepare.outputs.ci-run-id }} --name transcriber-release --dir ci-artifacts 2>/dev/null; then
+          echo "✅ Downloaded CI artifacts successfully"
+          echo "📋 Available CI artifacts:"
+          ls -la ci-artifacts/ || true
+          
+          # Look for any zip file with version pattern (more flexible matching)
+          RELEASE_VERSION="${{ needs.prepare.outputs.version }}"
+          FOUND_ZIP=""
+          
+          # Try exact version match first
+          if [ -f "ci-artifacts/transcriber-${RELEASE_VERSION}.zip" ]; then
+            FOUND_ZIP="ci-artifacts/transcriber-${RELEASE_VERSION}.zip"
+            echo "✅ Found exact version match: $FOUND_ZIP"
+          else
+            # Try pattern matching for any transcriber zip
+            FOUND_ZIP=$(find ci-artifacts -name "transcriber-*.zip" | head -1)
+            if [ -n "$FOUND_ZIP" ]; then
+              echo "ℹ️  Found transcriber archive (version may differ): $FOUND_ZIP"
             fi
+          fi
+          
+          if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
+            echo "📦 Extracting binary from: $FOUND_ZIP"
+            cd ci-artifacts
+            unzip -q "$FOUND_ZIP"
+            
+            # Look for transcriber binary in extracted contents
+            TRANSCRIBER_BINARY=$(find . -name "transcriber" -type f | head -1)
+            if [ -n "$TRANSCRIBER_BINARY" ] && [ -f "$TRANSCRIBER_BINARY" ]; then
+              echo "✅ Found CLI binary: $TRANSCRIBER_BINARY"
+              mkdir -p ../.build/release
+              cp "$TRANSCRIBER_BINARY" ../.build/release/transcriber
+              cp "$TRANSCRIBER_BINARY" ../transcriber-signed
+              chmod +x ../.build/release/transcriber
+              chmod +x ../transcriber-signed
+              echo "✅ CLI binary extracted and ready"
+            else
+              echo "⚠️  Binary not found in CI artifacts, will build from scratch"
+            fi
+          else
+            echo "⚠️  No suitable transcriber archive found in CI artifacts" 
           fi
         else
           echo "⚠️  Failed to download CI artifacts, will build from scratch"
@@ -113,7 +164,11 @@ jobs:
     
     - name: Build CLI (if not cached/downloaded)
       if: steps.cache-cli.outputs.cache-hit != 'true'
+      env:
+        RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
       run: |
+        echo "🏷️  Building with version: ${{ needs.prepare.outputs.version }}"
+        make version-debug
         if [ ! -f ".build/release/transcriber" ]; then
           echo "🔨 Building CLI from source..."
           make build-release-cli
@@ -177,7 +232,11 @@ jobs:
     
     - name: Build App (if not cached)
       if: steps.cache-app.outputs.cache-hit != 'true'
+      env:
+        RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
       run: |
+        echo "🏷️  Building App with version: ${{ needs.prepare.outputs.version }}"
+        make version-debug
         echo "🔨 Building App from source..."
         make build-release-app
         make sign-app
@@ -292,8 +351,11 @@ EOF
         echo "✅ ZIP archive created"
     
     - name: Create DMG installer
+      env:
+        RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
       run: |
-        echo "💿 Creating DMG installer..."
+        echo "💿 Creating DMG installer with version ${{ needs.prepare.outputs.version }}..."
+        make version-debug
         make dmg
         echo "✅ DMG installer created"
     
