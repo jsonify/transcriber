@@ -387,13 +387,13 @@ jobs:
         
         # Create install script
         cat > "$ARCHIVE_DIR/install.sh" << 'EOF'
-#!/bin/bash
-set -e
-echo "Installing Transcriber..."
-sudo cp transcriber /usr/local/bin/
-echo "✅ Transcriber installed to /usr/local/bin/"
-echo "Run 'transcriber --help' to get started"
-EOF
+        #!/bin/bash
+        set -e
+        echo "Installing Transcriber..."
+        sudo cp transcriber /usr/local/bin/
+        echo "✅ Transcriber installed to /usr/local/bin/"
+        echo "Run 'transcriber --help' to get started"
+        EOF
         chmod +x "$ARCHIVE_DIR/install.sh"
         
         cd releases
