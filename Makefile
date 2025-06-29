@@ -4,22 +4,32 @@
 # Project Configuration
 PROGRAM_NAME := transcriber
 APP_NAME := TranscriberApp
-# Version management with VERSION file fallback
+# Version management with VERSION file fallback and release override support
 VERSION_FILE := VERSION
-# Only consider semantic version tags (v1.2.3 format, no suffixes)
-GIT_VERSION := $(shell git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$$' | sort -V | tail -n1 | sed 's/^v//' 2>/dev/null)
-FILE_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null | tr -d '\n' || echo "")
+RELEASE_VERSION ?= # Can be set via environment for CI/release builds
 
-# Use git tag if available, otherwise fall back to VERSION file with warning
-ifeq ($(GIT_VERSION),)
-  ifneq ($(FILE_VERSION),)
-    VERSION := $(FILE_VERSION)
-    $(warning ⚠️  No git tags found, using VERSION file: $(VERSION))
+# Version resolution logic with release override support
+ifeq ($(RELEASE_VERSION),)
+  # Development build: use latest git tag or VERSION file
+  # Only consider semantic version tags (v1.2.3 format, no suffixes)
+  GIT_VERSION := $(shell git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$$' | sort -V | tail -n1 | sed 's/^v//' 2>/dev/null)
+  FILE_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null | tr -d '\n' || echo "")
+  
+  # Use git tag if available, otherwise fall back to VERSION file with warning
+  ifeq ($(GIT_VERSION),)
+    ifneq ($(FILE_VERSION),)
+      VERSION := $(FILE_VERSION)
+      $(warning ⚠️  No git tags found, using VERSION file: $(VERSION))
+    else
+      $(error ❌ Neither git tags nor VERSION file found - cannot determine version)
+    endif
   else
-    $(error ❌ Neither git tags nor VERSION file found - cannot determine version)
+    VERSION := $(GIT_VERSION)
   endif
 else
-  VERSION := $(GIT_VERSION)
+  # Release build: use provided version override (for CI/release workflows)
+  VERSION := $(RELEASE_VERSION)
+  $(info 🏷️  Using release version override: $(VERSION))
 endif
 BUILD_DIR := .build
 RELEASE_DIR := releases
@@ -327,11 +337,33 @@ version:
 	@echo "   Current: $(VERSION)"
 	@echo "   Git tag: $(GIT_VERSION)"
 	@echo "   VERSION file: $(FILE_VERSION)"
+	@if [ -n "$(RELEASE_VERSION)" ]; then \
+		echo "   Release override: $(RELEASE_VERSION)"; \
+	fi
 	@echo ""
 	@echo "💡 To update version:"
 	@echo "  1. Create git tag: git tag v<version>"
 	@echo "  2. Update VERSION file: make update-version-file"
 	@echo "  3. Run 'make release' to build new version"
+
+.PHONY: version-debug
+version-debug:
+	@echo "🔍 Detailed Version Debug Information:"
+	@echo "   RELEASE_VERSION: '$(RELEASE_VERSION)'"
+	@echo "   GIT_VERSION: '$(GIT_VERSION)'"
+	@echo "   FILE_VERSION: '$(FILE_VERSION)'"
+	@echo "   Final VERSION: '$(VERSION)'"
+	@echo ""
+	@echo "🔧 Version Resolution Logic:"
+	@if [ -n "$(RELEASE_VERSION)" ]; then \
+		echo "   ✅ Using RELEASE_VERSION override (CI/release build)"; \
+	elif [ -n "$(GIT_VERSION)" ]; then \
+		echo "   ✅ Using GIT_VERSION (development build)"; \
+	elif [ -n "$(FILE_VERSION)" ]; then \
+		echo "   ⚠️  Using FILE_VERSION fallback (no git tags)"; \
+	else \
+		echo "   ❌ No version source available"; \
+	fi
 
 .PHONY: version-info
 version-info: version
