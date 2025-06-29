@@ -403,6 +403,9 @@ size: build-release
 .PHONY: installer
 installer: build-app-bundle create-installer
 
+.PHONY: dmg
+dmg: build-app-bundle create-dmg
+
 .PHONY: build-app-bundle
 build-app-bundle: build-release-app sign-app
 	@echo "📱 Creating macOS app bundle..."
@@ -412,6 +415,11 @@ build-app-bundle: build-release-app sign-app
 create-installer: build-release-all sign-all
 	@echo "📦 Creating macOS installer package..."
 	$(INSTALLER_DIR)/build-scripts/create-installer.sh
+
+.PHONY: create-dmg
+create-dmg: build-release-all sign-all
+	@echo "💿 Creating macOS DMG installer..."
+	$(INSTALLER_DIR)/build-scripts/create-dmg.sh
 
 .PHONY: installer-production
 installer-production: check-signing-environment build-app-bundle create-installer
@@ -425,11 +433,24 @@ installer-production: check-signing-environment build-app-bundle create-installe
 		echo "   Set DEVELOPER_ID_INSTALLER in .env for production signing"; \
 	fi
 
+.PHONY: dmg-production
+dmg-production: check-signing-environment build-app-bundle create-dmg
+	@echo "💿 Production DMG created with code signing"
+	@if [ "$(SIGNING_MODE)" = "production" ]; then \
+		echo "✅ DMG signed with Developer ID and ready for distribution"; \
+		echo "   Location: $(RELEASE_DIR)/Transcriber-$(VERSION).dmg"; \
+		echo "   Test: hdiutil attach '$(RELEASE_DIR)/Transcriber-$(VERSION).dmg'"; \
+	else \
+		echo "⚠️  Development DMG created - may show Gatekeeper warnings"; \
+		echo "   Set DEVELOPER_ID_APPLICATION in .env for production signing"; \
+	fi
+
 .PHONY: installer-clean
 installer-clean:
 	@echo "🧹 Cleaning installer build artifacts..."
 	rm -rf $(INSTALLER_DIR)/build
 	rm -f $(INSTALLER_PKG)
+	rm -f $(RELEASE_DIR)/Transcriber-*.dmg
 
 # Help target
 .PHONY: help
