@@ -146,11 +146,20 @@ Transcriber v$VERSION
 ====================
 
 📱 INSTALL APP:
-   Drag Transcriber.app to the Applications folder
+   1. Drag Transcriber.app to the Applications folder
+   2. IMPORTANT: If macOS blocks the app with "damaged" error:
+      • Open Terminal and run:
+        xattr -d com.apple.quarantine /Applications/Transcriber.app
+      • OR right-click Transcriber.app → "Open" → Click "Open"
 
 ⌨️  INSTALL CLI TOOL:
    Double-click "Install CLI Tool.command"
    (Requires administrator password)
+
+🔒 SECURITY NOTE:
+   This is an unsigned app. macOS may show security warnings.
+   The app is safe but hasn't been notarized through Apple's process.
+   Use the commands above to bypass Gatekeeper restrictions.
 
 📋 WHAT'S INCLUDED:
    • Transcriber.app - Native macOS application

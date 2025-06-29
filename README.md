@@ -15,6 +15,25 @@ A modern MacOS speech recognition CLI tool for transcribing audio files using Ap
 
 ## Installation
 
+### Quick Install (DMG)
+
+1. Download the latest DMG from the [releases page](https://github.com/jsonify/transcriber/releases)
+2. Open the DMG file
+3. Drag Transcriber.app to your Applications folder
+4. **Important**: Due to macOS security restrictions, you'll need to bypass Gatekeeper on first launch:
+
+```bash
+# Remove quarantine attribute to bypass Gatekeeper
+xattr -d com.apple.quarantine /Applications/Transcriber.app
+```
+
+5. Launch Transcriber.app from Applications
+
+**Alternative method** if the command above doesn't work:
+- Right-click Transcriber.app → "Open"
+- Click "Open" when macOS warns about unidentified developer
+- The app will then launch normally in future
+
 ### Build from Source
 
 ```bash
@@ -51,12 +70,32 @@ The installer package includes both the CLI tool and native macOS application, a
 
 ## Code Signing
 
-For production distribution and to avoid macOS Gatekeeper warnings, you can configure code signing with Developer ID certificates.
+To reduce macOS Gatekeeper warnings, you can configure code signing. There are three approaches available:
 
-### Quick Setup
+### Option 1: Self-Signed Certificates (Recommended for Open Source)
+
+**Best for:** Individual developers, open source projects, or anyone without an Apple Developer account.
 
 ```bash
-# Interactive setup wizard
+# Create self-signed certificates (no Apple account needed)
+make setup-self-signed
+
+# Build signed package
+make installer-production
+```
+
+**Benefits:**
+- ✅ No Apple Developer account required ($0 vs $99/year)
+- ✅ Better security than ad-hoc signing
+- ✅ Users can easily bypass Gatekeeper with provided instructions
+- ⚠️ Still shows Gatekeeper warnings (but with bypass instructions)
+
+### Option 2: Apple Developer ID (Production)
+
+**Best for:** Commercial distribution, maximum user trust.
+
+```bash
+# Interactive setup wizard (requires Apple Developer account)
 scripts/setup-signing.sh
 
 # Verify configuration
@@ -66,7 +105,12 @@ scripts/verify-signing.sh
 scripts/build-production.sh
 ```
 
-### Manual Configuration
+**Requirements:**
+1. **Apple Developer Program membership** ($99/year)
+2. **Developer ID certificates** from Apple Developer Portal
+3. **Notarization** setup for best user experience
+
+**Manual Configuration:**
 
 1. **Obtain Developer ID certificates** from Apple Developer Portal
 2. **Create `.env` file** (copy from `.env.example`)
@@ -89,22 +133,36 @@ xcrun notarytool store-credentials "your-profile-name" \
     --team-id YOUR_TEAM_ID
 ```
 
+### Option 3: Ad-hoc Signing (Development Only)
+
+**Best for:** Development, testing, personal use.
+
+```bash
+# Uses default ad-hoc signing
+make build-release
+make sign
+```
+
 ### Code Signing Commands
 
 ```bash
-# Check signing configuration
+# Check current signing configuration
 make check-signing-environment
+
+# Set up self-signed certificates (recommended)
+make setup-self-signed
 
 # Verify certificates
 make verify-certificates
 
-# Build with production signing
+# Build with current signing configuration
 make installer-production
 ```
 
 **Signing Modes:**
-- **Development**: Ad-hoc signatures (default, Gatekeeper warnings)
-- **Production**: Developer ID signatures (no Gatekeeper warnings)
+- **Ad-hoc**: No certificates (default, shows Gatekeeper warnings)
+- **Self-signed**: Self-generated certificates (shows warnings with bypass instructions)
+- **Developer ID**: Apple certificates (minimal or no Gatekeeper warnings)
 
 ## Usage
 
@@ -303,6 +361,34 @@ Next segment text
 - No data is stored or transmitted by this tool itself
 
 ## Troubleshooting
+
+### macOS Gatekeeper "App is Damaged" Error
+
+If macOS blocks the app with errors like "Transcriber is damaged and can't be opened" or "App cannot be opened because the developer cannot be verified":
+
+**Quick Fix (Recommended):**
+```bash
+# Remove quarantine attribute
+xattr -d com.apple.quarantine /Applications/Transcriber.app
+```
+
+**Alternative Method:**
+1. Right-click Transcriber.app in Applications
+2. Select "Open" from the context menu
+3. Click "Open" when macOS warns about unidentified developer
+4. App will launch normally in future
+
+**Why This Happens:**
+- macOS Gatekeeper blocks unsigned or self-signed applications
+- This is a security feature, not a virus or actual damage
+- The bypass methods above are safe and standard practice
+
+**Permanent Solution:**
+```bash
+# Set up better code signing (no Apple account needed)
+make setup-self-signed
+make installer-production
+```
 
 ### Abort Signal (Process Killed)
 If you get `[1] XXXX abort transcriber file.mp3`, this is due to missing Speech Recognition entitlements:

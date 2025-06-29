@@ -263,6 +263,11 @@ verify-certificates:
 		echo "   💡 Set DEVELOPER_ID_APPLICATION to enable production signing"; \
 	fi
 
+.PHONY: setup-self-signed
+setup-self-signed:
+	@echo "🔐 Setting up self-signed certificates..."
+	scripts/setup-self-signed.sh
+
 .PHONY: check-signing-environment
 check-signing-environment: verify-certificates
 	@echo ""
@@ -454,6 +459,7 @@ info:
 	@echo "   make info        - Show this information"
 	@echo ""
 	@echo "🔐 Code Signing Commands:"
+	@echo "   make setup-self-signed   - Create self-signed certificates (no Apple account needed)"
 	@echo "   make verify-certificates - Check Developer ID certificates"
 	@echo "   make check-signing-environment - Show signing configuration"
 
