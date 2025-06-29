@@ -34,10 +34,16 @@ mkdir -p "$INSTALLER_BUILD_DIR"
 mkdir -p "$DMG_OUTPUT_DIR"
 
 # Build the Swift binaries if needed
-echo "🔨 Building Swift binaries..."
+echo "🔨 Checking for Swift binaries..."
 cd "$PROJECT_ROOT"
-if [ ! -f "$BUILD_DIR/transcriber" ] || [ ! -f "$BUILD_DIR/TranscriberApp" ]; then
-    echo "   Building CLI and App binaries..."
+
+# Check if we have pre-built binaries
+if [ -f "$BUILD_DIR/transcriber" ] && [ -f "$BUILD_DIR/TranscriberApp" ]; then
+    echo "✅ Found pre-built binaries - skipping build step"
+    echo "   CLI: $BUILD_DIR/transcriber"
+    echo "   App: $BUILD_DIR/TranscriberApp"
+else
+    echo "   Building CLI and App binaries from source..."
     make build-release-all
     make sign-all
 fi
