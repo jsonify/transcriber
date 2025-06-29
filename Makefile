@@ -111,6 +111,8 @@ release-app: clean build-release-app sign-app archive-app
 .PHONY: build-release-cli
 build-release-cli:
 	@echo "📦 Building $(PROGRAM_NAME) CLI v$(VERSION) universal binary (release)..."
+	@# Clean build cache to avoid conflicts between architecture builds
+	swift package clean
 	@echo "   🏗️  Building for x86_64 (Intel)..."
 	swift build $(SWIFT_BUILD_FLAGS) --arch x86_64 --product $(PROGRAM_NAME)
 	@echo "   🏗️  Building for arm64 (Apple Silicon)..."
@@ -135,6 +137,8 @@ build-release-cli:
 .PHONY: build-release-app
 build-release-app:
 	@echo "📱 Building $(APP_NAME) v$(VERSION) universal binary (release)..."
+	@# Clean build cache to avoid conflicts between architecture builds
+	swift package clean
 	@echo "   🏗️  Building for x86_64 (Intel)..."
 	swift build $(SWIFT_BUILD_FLAGS) --arch x86_64 --product $(APP_NAME)
 	@echo "   🏗️  Building for arm64 (Apple Silicon)..."
@@ -165,7 +169,7 @@ build-release-all: build-release-cli build-release-app
 build-release: build-release-cli
 
 .PHONY: sign
-sign: build-release-cli
+sign:
 	@echo "🔐 Code signing CLI with Speech Recognition entitlements ($(SIGNING_MODE) mode)..."
 	@if [ ! -f "$(ENTITLEMENTS_FILE)" ]; then \
 		echo "❌ Entitlements file not found: $(ENTITLEMENTS_FILE)"; \
@@ -175,6 +179,11 @@ sign: build-release-cli
 		echo "   Using Developer ID: $(CLI_SIGN_IDENTITY)"; \
 	else \
 		echo "   Using ad-hoc signature (development mode)"; \
+	fi
+	@# Check if universal binary exists, if not build it
+	@if [ ! -f ".build/release/$(PROGRAM_NAME)" ]; then \
+		echo "   Universal binary not found, building..."; \
+		$(MAKE) build-release-cli; \
 	fi
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
@@ -187,7 +196,7 @@ sign: build-release-cli
 	@echo "✅ CLI code signing complete"
 
 .PHONY: sign-app
-sign-app: build-release-app
+sign-app:
 	@echo "🔐 Code signing App with Speech Recognition entitlements ($(SIGNING_MODE) mode)..."
 	@if [ ! -f "$(ENTITLEMENTS_FILE)" ]; then \
 		echo "❌ Entitlements file not found: $(ENTITLEMENTS_FILE)"; \
@@ -197,6 +206,11 @@ sign-app: build-release-app
 		echo "   Using Developer ID: $(APP_SIGN_IDENTITY)"; \
 	else \
 		echo "   Using ad-hoc signature (development mode)"; \
+	fi
+	@# Check if universal binary exists, if not build it
+	@if [ ! -f ".build/release/$(APP_NAME)" ]; then \
+		echo "   Universal binary not found, building..."; \
+		$(MAKE) build-release-app; \
 	fi
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(APP_NAME)"; \
