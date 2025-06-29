@@ -110,8 +110,18 @@ release-app: clean build-release-app sign-app archive-app
 
 .PHONY: build-release-cli
 build-release-cli:
-	@echo "📦 Building $(PROGRAM_NAME) CLI v$(VERSION) (release)..."
-	swift build $(SWIFT_BUILD_FLAGS) --product $(PROGRAM_NAME)
+	@echo "📦 Building $(PROGRAM_NAME) CLI v$(VERSION) universal binary (release)..."
+	@echo "   🏗️  Building for x86_64 (Intel)..."
+	swift build $(SWIFT_BUILD_FLAGS) --arch x86_64 --product $(PROGRAM_NAME)
+	@echo "   🏗️  Building for arm64 (Apple Silicon)..."
+	swift build $(SWIFT_BUILD_FLAGS) --arch arm64 --product $(PROGRAM_NAME)
+	@echo "   🔗 Creating universal binary..."
+	lipo -create \
+		.build/x86_64-apple-macosx/release/$(PROGRAM_NAME) \
+		.build/arm64-apple-macosx/release/$(PROGRAM_NAME) \
+		-output .build/release/$(PROGRAM_NAME)
+	@echo "   🔍 Verifying universal binary..."
+	lipo -info .build/release/$(PROGRAM_NAME)
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
 	if [ ! -f "$$BINARY_PATH" ]; then \
@@ -120,12 +130,22 @@ build-release-cli:
 		ls -la "$$BIN_PATH" 2>/dev/null || echo "Directory does not exist"; \
 		exit 1; \
 	fi; \
-	echo "✅ CLI release build complete at $$BINARY_PATH"
+	echo "✅ CLI universal binary build complete at $$BINARY_PATH"
 
 .PHONY: build-release-app
 build-release-app:
-	@echo "📱 Building $(APP_NAME) v$(VERSION) (release)..."
-	swift build $(SWIFT_BUILD_FLAGS) --product $(APP_NAME)
+	@echo "📱 Building $(APP_NAME) v$(VERSION) universal binary (release)..."
+	@echo "   🏗️  Building for x86_64 (Intel)..."
+	swift build $(SWIFT_BUILD_FLAGS) --arch x86_64 --product $(APP_NAME)
+	@echo "   🏗️  Building for arm64 (Apple Silicon)..."
+	swift build $(SWIFT_BUILD_FLAGS) --arch arm64 --product $(APP_NAME)
+	@echo "   🔗 Creating universal binary..."
+	lipo -create \
+		.build/x86_64-apple-macosx/release/$(APP_NAME) \
+		.build/arm64-apple-macosx/release/$(APP_NAME) \
+		-output .build/release/$(APP_NAME)
+	@echo "   🔍 Verifying universal binary..."
+	lipo -info .build/release/$(APP_NAME)
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(APP_NAME)"; \
 	if [ ! -f "$$BINARY_PATH" ]; then \
@@ -134,7 +154,7 @@ build-release-app:
 		ls -la "$$BIN_PATH" 2>/dev/null || echo "Directory does not exist"; \
 		exit 1; \
 	fi; \
-	echo "✅ App release build complete at $$BINARY_PATH"
+	echo "✅ App universal binary build complete at $$BINARY_PATH"
 
 .PHONY: build-release-all
 build-release-all: build-release-cli build-release-app

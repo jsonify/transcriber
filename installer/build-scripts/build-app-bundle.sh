@@ -36,15 +36,44 @@ mkdir -p "$APP_BUNDLE_PATH/Contents/Resources"
 
 # Build the Swift app if needed
 if [ ! -f "$BUILD_DIR/TranscriberApp" ]; then
-    echo "🔨 Building TranscriberApp binary..."
+    echo "🔨 Building universal TranscriberApp binary..."
     cd "$PROJECT_ROOT"
-    swift build -c release --product TranscriberApp
+    
+    # Build for both architectures
+    echo "   🏗️  Building for x86_64 (Intel)..."
+    swift build -c release --arch x86_64 --product TranscriberApp
+    echo "   🏗️  Building for arm64 (Apple Silicon)..."
+    swift build -c release --arch arm64 --product TranscriberApp
+    
+    # Create universal binary
+    echo "   🔗 Creating universal binary..."
+    lipo -create \
+        .build/x86_64-apple-macosx/release/TranscriberApp \
+        .build/arm64-apple-macosx/release/TranscriberApp \
+        -output .build/release/TranscriberApp
+    
+    # Verify universal binary
+    echo "   🔍 Verifying universal binary..."
+    lipo -info .build/release/TranscriberApp
 fi
 
 # Verify binary exists
 if [ ! -f "$BUILD_DIR/TranscriberApp" ]; then
     echo "❌ TranscriberApp binary not found at $BUILD_DIR/TranscriberApp"
     exit 1
+fi
+
+# Verify it's a universal binary
+echo "🔍 Verifying binary architecture..."
+if lipo -info "$BUILD_DIR/TranscriberApp" | grep -q "x86_64 arm64"; then
+    echo "✅ Universal binary confirmed (x86_64 + arm64)"
+elif lipo -info "$BUILD_DIR/TranscriberApp" | grep -q "x86_64"; then
+    echo "⚠️  Intel-only binary detected (x86_64)"
+elif lipo -info "$BUILD_DIR/TranscriberApp" | grep -q "arm64"; then
+    echo "⚠️  Apple Silicon-only binary detected (arm64)"
+else
+    echo "❌ Unknown binary architecture"
+    lipo -info "$BUILD_DIR/TranscriberApp"
 fi
 
 # Copy the main binary
