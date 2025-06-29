@@ -51,7 +51,16 @@ class AppDelegate: ObservableObject {
         speechTranscriber.setProgressCallback { [weak self] progress, message in
             Task { @MainActor in
                 self?.isTranscribing = progress < 1.0
+                // Update progress for currently processing file
+                self?.updateCurrentFileProgress(progress, message)
             }
+        }
+    }
+    
+    private func updateCurrentFileProgress(_ progress: Double, _ message: String) {
+        if let currentIndex = selectedFiles.firstIndex(where: { $0.status == .processing }) {
+            selectedFiles[currentIndex].progress = progress
+            selectedFiles[currentIndex].progressMessage = message
         }
     }
     
@@ -115,6 +124,99 @@ class AppDelegate: ObservableObject {
     
     // MARK: - Transcription
     
+    // Individual file transcription control
+    func startTranscription(for fileItem: FileItem) async {
+        guard let index = selectedFiles.firstIndex(where: { $0.id == fileItem.id }) else { return }
+        guard selectedFiles[index].canStart else { return }
+        
+        do {
+            // Set file to queued state
+            selectedFiles[index].status = .queued
+            selectedFiles[index].progress = 0.0
+            selectedFiles[index].progressMessage = "Queued for transcription..."
+            selectedFiles[index].errorMessage = nil
+            
+            // Brief delay to show queued state
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            
+            // Start processing
+            selectedFiles[index].status = .processing
+            selectedFiles[index].progressMessage = "Initializing..."
+            isTranscribing = true
+            
+            // Request permission first
+            try await speechTranscriber.requestPermission()
+            
+            let result = try await speechTranscriber.transcribeAudioFile(
+                at: selectedFiles[index].url,
+                language: language,
+                onDevice: onDevice,
+                quality: quality
+            )
+            
+            // Save the result to file
+            let outputText = OutputFormatter.format(result, as: OutputFormat(rawValue: outputFormat) ?? .text)
+            let outputURL = selectedFiles[index].url.deletingPathExtension().appendingPathExtension(outputFormat)
+            try outputText.write(to: outputURL, atomically: true, encoding: .utf8)
+            
+            // Update file status
+            selectedFiles[index].status = .done
+            selectedFiles[index].progress = 1.0
+            selectedFiles[index].progressMessage = "Complete!"
+            
+            // Add to results
+            transcriptionResults.append(result)
+            
+            // Show results if this is the first completed file
+            if transcriptionResults.count == 1 {
+                showingResults = true
+            }
+            
+            // Send completion notification
+            sendCompletionNotification(for: fileItem)
+            
+        } catch {
+            selectedFiles[index].status = .error
+            selectedFiles[index].progress = 0.0
+            selectedFiles[index].progressMessage = ""
+            selectedFiles[index].errorMessage = error.localizedDescription
+            
+            errorMessage = "Failed to transcribe \(fileItem.url.lastPathComponent): \(error.localizedDescription)"
+            showingError = true
+        }
+        
+        // Update global transcription state
+        isTranscribing = selectedFiles.contains { $0.status == .processing || $0.status == .queued }
+    }
+    
+    func cancelTranscription(for fileItem: FileItem) {
+        guard let index = selectedFiles.firstIndex(where: { $0.id == fileItem.id }) else { return }
+        guard selectedFiles[index].canCancel else { return }
+        
+        // Cancel the transcription
+        speechTranscriber.cancelTranscription()
+        
+        // Update file status
+        selectedFiles[index].status = .cancelled
+        selectedFiles[index].progress = 0.0
+        selectedFiles[index].progressMessage = ""
+        selectedFiles[index].errorMessage = nil
+        
+        // Update global transcription state
+        isTranscribing = selectedFiles.contains { $0.status == .processing || $0.status == .queued }
+    }
+    
+    func queueTranscription(for fileItem: FileItem) {
+        guard let index = selectedFiles.firstIndex(where: { $0.id == fileItem.id }) else { return }
+        guard selectedFiles[index].status == .pending else { return }
+        
+        selectedFiles[index].status = .queued
+        selectedFiles[index].progress = 0.0
+        selectedFiles[index].progressMessage = "Queued for transcription..."
+        selectedFiles[index].errorMessage = nil
+    }
+    
+    // Batch transcription (maintains backwards compatibility)
     func startTranscription() async {
         guard !selectedFiles.isEmpty else { return }
         
@@ -171,6 +273,25 @@ class AppDelegate: ObservableObject {
         
         let request = UNNotificationRequest(
             identifier: "transcription-complete",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Failed to send notification: \(error)")
+            }
+        }
+    }
+    
+    private func sendCompletionNotification(for fileItem: FileItem) {
+        let content = UNMutableNotificationContent()
+        content.title = "File Transcription Complete"
+        content.body = "Successfully transcribed \(fileItem.url.lastPathComponent)"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "file-transcription-complete-\(fileItem.id)",
             content: content,
             trigger: nil
         )
