@@ -30,10 +30,12 @@ final class UniversalBinaryTests: XCTestCase {
             let output = String(data: data, encoding: .utf8) ?? ""
             
             // If this is a single-architecture binary (normal in CI), skip the universal binary check
+            let hasX86 = output.contains("x86_64")
+            let hasArm = output.contains("arm64")
             if output.contains("is not a fat file") || 
-               (!output.contains("x86_64") && !output.contains("arm64")) ||
-               (output.contains("x86_64") && !output.contains("arm64")) ||
-               (!output.contains("x86_64") && output.contains("arm64")) {
+               (!hasX86 && !hasArm) ||
+               (hasX86 && !hasArm) ||
+               (!hasX86 && hasArm) {
                 throw XCTSkip("Single-architecture binary detected - universal binary tests only apply to manually built binaries")
             }
             
@@ -74,10 +76,12 @@ final class UniversalBinaryTests: XCTestCase {
             let output = String(data: data, encoding: .utf8) ?? ""
             
             // If this is a single-architecture binary (normal in CI), skip the universal binary check
+            let hasX86 = output.contains("x86_64")
+            let hasArm = output.contains("arm64")
             if output.contains("is not a fat file") || 
-               (!output.contains("x86_64") && !output.contains("arm64")) ||
-               (output.contains("x86_64") && !output.contains("arm64")) ||
-               (!output.contains("x86_64") && output.contains("arm64")) {
+               (!hasX86 && !hasArm) ||
+               (hasX86 && !hasArm) ||
+               (!hasX86 && hasArm) {
                 throw XCTSkip("Single-architecture binary detected - universal binary tests only apply to manually built binaries")
             }
             
