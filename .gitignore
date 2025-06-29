@@ -10,6 +10,7 @@ CLAUDE.md
 /.claude
 .claude/settings.local.json
 /scratchpad
+/screenshots
 Package.resolved
 
 # Release builds and installer artifacts  
@@ -19,7 +20,7 @@ installer/build/
 *.zip
 
 # Screenshots
-CleanShot*.png
+*.png
 
 # Environment configuration with secrets
 .env
