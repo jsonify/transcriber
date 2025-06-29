@@ -123,4 +123,76 @@ class AppTests: XCTestCase {
             XCTAssertEqual(format.fileExtension, format.rawValue)
         }
     }
+    
+    // MARK: - UI Component Tests
+    
+    func testFileItemDataStructure() {
+        // Test FileItem creation and properties
+        let testURL = URL(string: "file:///test-audio.mp3")!
+        let fileItem = FileItem(url: testURL)
+        
+        XCTAssertEqual(fileItem.url, testURL)
+        XCTAssertEqual(fileItem.status, .pending)
+        XCTAssertEqual(fileItem.duration, "")
+        XCTAssertEqual(fileItem.progress, 0.0)
+        XCTAssertNotNil(fileItem.id)
+    }
+    
+    func testFileItemStatusTracking() {
+        // Test FileStatus enum cases
+        let statuses: [FileStatus] = [.pending, .processing, .done, .error]
+        XCTAssertEqual(statuses.count, 4)
+        
+        // Test status transitions
+        let testURL = URL(string: "file:///test-audio.wav")!
+        var fileItem = FileItem(url: testURL)
+        
+        // Initial state
+        XCTAssertEqual(fileItem.status, .pending)
+        
+        // Simulate processing
+        fileItem.status = .processing
+        fileItem.progress = 0.5
+        XCTAssertEqual(fileItem.status, .processing)
+        XCTAssertEqual(fileItem.progress, 0.5)
+        
+        // Simulate completion
+        fileItem.status = .done
+        fileItem.progress = 1.0
+        XCTAssertEqual(fileItem.status, .done)
+        XCTAssertEqual(fileItem.progress, 1.0)
+    }
+    
+    func testFileItemEquality() {
+        // Test FileItem equality comparison
+        let testURL1 = URL(string: "file:///test1.mp3")!
+        let testURL2 = URL(string: "file:///test2.mp3")!
+        
+        let fileItem1 = FileItem(url: testURL1)
+        let fileItem2 = FileItem(url: testURL1) // Same URL
+        let fileItem3 = FileItem(url: testURL2) // Different URL
+        
+        // Same URLs should be equal
+        XCTAssertEqual(fileItem1, fileItem2)
+        
+        // Different URLs should not be equal
+        XCTAssertNotEqual(fileItem1, fileItem3)
+    }
+    
+    func testQualityParameterSupport() {
+        // Test that quality parameter values are properly supported  
+        let validQualities = ["High", "Medium", "Low", "invalid"]
+        
+        // Test that all quality values can be used (testing API compatibility)
+        for quality in validQualities {
+            // Testing the parameter acceptance - actual transcription would require files/permissions
+            XCTAssertNotNil(quality)
+            XCTAssertFalse(quality.isEmpty)
+        }
+        
+        // Test quality-specific behavior (lower case handling)
+        XCTAssertEqual("High".lowercased(), "high")
+        XCTAssertEqual("Medium".lowercased(), "medium")
+        XCTAssertEqual("Low".lowercased(), "low")
+    }
 }

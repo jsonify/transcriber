@@ -56,7 +56,8 @@ public class SpeechTranscriber: NSObject, ObservableObject {
     public func transcribeAudioFile(
         at url: URL,
         language: String = "en-US", 
-        onDevice: Bool = true
+        onDevice: Bool = true,
+        quality: String = "High"
     ) async throws -> TranscriptionResult {
         try await requestPermission()
         
@@ -75,12 +76,32 @@ public class SpeechTranscriber: NSObject, ObservableObject {
         }
         
         let request = SFSpeechURLRecognitionRequest(url: url)
-        request.shouldReportPartialResults = false
-        request.requiresOnDeviceRecognition = onDevice && recognizer.supportsOnDeviceRecognition
         
-        if #available(macOS 13.0, *) {
-            request.addsPunctuation = true
+        // Configure request based on quality setting
+        switch quality.lowercased() {
+        case "high":
+            request.shouldReportPartialResults = false
+            if #available(macOS 13.0, *) {
+                request.addsPunctuation = true
+            }
+        case "medium":
+            request.shouldReportPartialResults = false
+            if #available(macOS 13.0, *) {
+                request.addsPunctuation = true
+            }
+        case "low":
+            request.shouldReportPartialResults = true // Faster processing
+            if #available(macOS 13.0, *) {
+                request.addsPunctuation = false // Skip punctuation for speed
+            }
+        default:
+            request.shouldReportPartialResults = false
+            if #available(macOS 13.0, *) {
+                request.addsPunctuation = true
+            }
         }
+        
+        request.requiresOnDeviceRecognition = onDevice && recognizer.supportsOnDeviceRecognition
         
         isTranscribing = true
         progress = 0.0

@@ -6,201 +6,216 @@ struct ContentView: View {
     @EnvironmentObject var appDelegate: AppDelegate
     @StateObject private var speechTranscriber = SpeechTranscriber()
     @State private var isShowingFilePicker = false
+    @State private var dragHover = false
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Header
-            VStack {
-                Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.blue)
-                
-                Text("Transcriber")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
-                Text("Modern macOS Speech Recognition")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.top, 20)
+        ZStack {
+            // Dark background
+            Color.black
+                .ignoresSafeArea()
             
-            Divider()
-            
-            // Configuration Section
-            VStack(alignment: .leading, spacing: 15) {
-                Text("Configuration")
-                    .font(.headline)
-                
+            VStack(spacing: 0) {
+                // Header with logo and user
                 HStack {
-                    Text("Language:")
-                        .frame(width: 80, alignment: .leading)
-                    Picker("Language", selection: $appDelegate.language) {
-                        Text("English (US)").tag("en-US")
-                        Text("English (UK)").tag("en-GB")
-                        Text("Spanish").tag("es-ES")
-                        Text("French").tag("fr-FR")
-                        Text("German").tag("de-DE")
-                        Text("Japanese").tag("ja-JP")
-                        Text("Chinese").tag("zh-CN")
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.blue)
+                        
+                        Text("Transcriber")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
                     }
-                    .pickerStyle(.menu)
-                    .frame(maxWidth: 200)
+                    
                     Spacer()
-                }
-                
-                HStack {
-                    Text("Output:")
-                        .frame(width: 80, alignment: .leading)
-                    Picker("Format", selection: $appDelegate.outputFormat) {
-                        Text("Text (.txt)").tag("txt")
-                        Text("JSON (.json)").tag("json")
-                        Text("SubRip (.srt)").tag("srt")
-                        Text("WebVTT (.vtt)").tag("vtt")
-                    }
-                    .pickerStyle(.menu)
-                    .frame(maxWidth: 200)
-                    Spacer()
-                }
-                
-                HStack {
-                    Text("Mode:")
-                        .frame(width: 80, alignment: .leading)
-                    Picker("Recognition Mode", selection: $appDelegate.onDevice) {
-                        Text("On-device").tag(true)
-                        Text("Server-based").tag(false)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 200)
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, 20)
-            
-            Divider()
-            
-            // File Selection Section
-            VStack(spacing: 15) {
-                Text("Audio Files")
-                    .font(.headline)
-                
-                if appDelegate.selectedFiles.isEmpty {
-                    Button(action: { isShowingFilePicker = true }) {
-                        VStack {
-                            Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 40))
-                                .foregroundColor(.blue)
-                            
-                            Text("Select Audio Files")
-                                .font(.title3)
-                                .fontWeight(.medium)
-                            
-                            Text("Choose .wav, .mp3, .m4a, .mp4, or other audio/video files")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            appDelegate.showingConfiguration = true
+                        }) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 16))
+                                .foregroundColor(.gray)
                         }
-                        .frame(height: 120)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.blue.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [5]))
-                        )
+                        .buttonStyle(.plain)
+                        
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 24, height: 24)
+                                .overlay {
+                                    Text("A")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                            
+                            Text("Alex Chan")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                        }
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("\(appDelegate.selectedFiles.count) file(s) selected")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            
-                            Spacer()
-                            
-                            Button("Clear") {
-                                appDelegate.clearFiles()
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                
+                Spacer()
+                
+                // Main content area
+                VStack(spacing: 32) {
+                    // Drag and drop area
+                    if appDelegate.selectedFiles.isEmpty {
+                        VStack(spacing: 16) {
+                            Button(action: { isShowingFilePicker = true }) {
+                                VStack(spacing: 16) {
+                                    Image(systemName: "arrow.up.circle")
+                                        .font(.system(size: 48))
+                                        .foregroundColor(.gray)
+                                    
+                                    VStack(spacing: 8) {
+                                        Text("Drag & Drop your audio/video files")
+                                            .font(.system(size: 18, weight: .medium))
+                                            .foregroundColor(.white)
+                                        
+                                        Text("or click to select files from your device")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 160)
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(.plain)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(dragHover ? Color.blue : Color.gray.opacity(0.3), lineWidth: 2)
+                            )
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(dragHover ? Color.blue.opacity(0.1) : Color.clear)
+                            )
                             
-                            Button("Add More") {
+                            Button("Select Files") {
                                 isShowingFilePicker = true
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
                         }
-                        
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 4) {
-                                ForEach(appDelegate.selectedFiles, id: \.self) { file in
+                        .padding(.horizontal, 32)
+                    }
+                    
+                    // Settings row
+                    HStack(spacing: 24) {
+                        // Language
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "globe")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                                
+                                Text("Language")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Picker("Language", selection: $appDelegate.language) {
+                                Group {
                                     HStack {
-                                        Image(systemName: appDelegate.getFileIcon(for: file))
-                                            .foregroundColor(.blue)
-                                        
-                                        Text(file.lastPathComponent)
-                                            .lineLimit(1)
-                                        
-                                        Spacer()
-                                        
-                                        Button(action: {
-                                            appDelegate.removeFile(file)
-                                        }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.secondary)
-                                        }
-                                        .buttonStyle(.borderless)
-                                    }
-                                    .padding(.vertical, 2)
+                                        Image(systemName: "flag.fill")
+                                            .foregroundColor(.red)
+                                        Text("English")
+                                    }.tag("en-US")
                                 }
                             }
+                            .pickerStyle(.menu)
+                            .frame(width: 120)
                         }
-                        .frame(maxHeight: 100)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                        .padding(.horizontal, 8)
+                        
+                        // Output Format
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                                
+                                Text("Output Format")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Picker("Format", selection: $appDelegate.outputFormat) {
+                                Text("SRT").tag("srt")
+                                Text("VTT").tag("vtt") 
+                                Text("TXT").tag("txt")
+                                Text("JSON").tag("json")
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 120)
+                        }
+                        
+                        // Quality
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                                
+                                Text("Quality")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Picker("Quality", selection: $appDelegate.quality) {
+                                Text("High").tag("High")
+                                Text("Medium").tag("Medium")
+                                Text("Low").tag("Low")
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 120)
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    
+                    // Uploaded Files section
+                    if !appDelegate.selectedFiles.isEmpty {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Uploaded Files")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 32)
+                            
+                            ScrollView {
+                                LazyVStack(spacing: 0) {
+                                    ForEach(appDelegate.selectedFiles) { fileItem in
+                                        FileListItemView(
+                                            fileItem: fileItem,
+                                            onPlay: {
+                                                appDelegate.playAudio(for: fileItem)
+                                            },
+                                            onDelete: {
+                                                appDelegate.removeFile(fileItem)
+                                            }
+                                        )
+                                        
+                                        if fileItem.id != appDelegate.selectedFiles.last?.id {
+                                            Divider()
+                                                .background(Color.gray.opacity(0.3))
+                                        }
+                                    }
+                                }
+                            }
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(12)
+                            .padding(.horizontal, 32)
+                        }
                     }
                 }
-            }
-            .padding(.horizontal, 20)
-            
-            // Progress Section
-            if appDelegate.isTranscribing || speechTranscriber.isTranscribing {
-                VStack(spacing: 10) {
-                    Text("Transcribing...")
-                        .font(.headline)
-                    
-                    ProgressView(value: speechTranscriber.progress)
-                        .progressViewStyle(.linear)
-                    
-                    Text(speechTranscriber.progressMessage)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 20)
-            }
-            
-            Spacer()
-            
-            // Action Buttons
-            HStack(spacing: 15) {
-                Button("Transcribe") {
-                    Task {
-                        await appDelegate.startTranscription()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(appDelegate.selectedFiles.isEmpty || appDelegate.isTranscribing)
                 
-                if !appDelegate.transcriptionResults.isEmpty {
-                    Button("View Results") {
-                        appDelegate.showResults()
-                    }
-                    .buttonStyle(.bordered)
-                }
+                Spacer()
             }
-            .padding(.bottom, 20)
         }
-        .frame(minWidth: 500, idealWidth: 600, maxWidth: .infinity,
-               minHeight: 400, idealHeight: 500, maxHeight: .infinity)
+        .onDrop(of: [UTType.audio, UTType.movie], isTargeted: $dragHover) { providers in
+            handleDrop(providers: providers)
+        }
         .fileImporter(
             isPresented: $isShowingFilePicker,
             allowedContentTypes: [
@@ -213,7 +228,7 @@ struct ContentView: View {
         ) { result in
             switch result {
             case .success(let urls):
-                appDelegate.selectedFiles.append(contentsOf: urls)
+                appDelegate.addFiles(urls)
             case .failure(let error):
                 appDelegate.errorMessage = "Failed to select files: \(error.localizedDescription)"
                 appDelegate.showingError = true
@@ -225,6 +240,10 @@ struct ContentView: View {
         .sheet(isPresented: $appDelegate.showingAbout) {
             AboutView()
         }
+        .sheet(isPresented: $appDelegate.showingConfiguration) {
+            SettingsView()
+                .environmentObject(appDelegate)
+        }
         .alert("Error", isPresented: $appDelegate.showingError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -232,6 +251,26 @@ struct ContentView: View {
         }
     }
     
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        var urls: [URL] = []
+        
+        for provider in providers {
+            if provider.canLoadObject(ofClass: URL.self) {
+                let _ = provider.loadObject(ofClass: URL.self) { url, error in
+                    if let url = url {
+                        DispatchQueue.main.async {
+                            urls.append(url)
+                            if urls.count == providers.count {
+                                appDelegate.addFiles(urls)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return true
+    }
 }
 
 #if DEBUG

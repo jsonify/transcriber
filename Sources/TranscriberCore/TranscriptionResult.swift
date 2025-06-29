@@ -35,6 +35,33 @@ public struct TranscriptionResult {
     }
 }
 
+// File management types for UI
+public enum FileStatus: Equatable {
+    case pending
+    case processing
+    case done
+    case error
+}
+
+public struct FileItem: Identifiable, Equatable {
+    public let id = UUID()
+    public let url: URL
+    public var status: FileStatus = .pending
+    public var duration: String = ""
+    public var progress: Double = 0.0
+    
+    public init(url: URL, status: FileStatus = .pending, duration: String = "", progress: Double = 0.0) {
+        self.url = url
+        self.status = status
+        self.duration = duration
+        self.progress = progress
+    }
+    
+    public static func == (lhs: FileItem, rhs: FileItem) -> Bool {
+        lhs.url == rhs.url
+    }
+}
+
 public enum TranscriptionError: Error, LocalizedError {
     case fileNotFound(String)
     case unsupportedFormat(String)

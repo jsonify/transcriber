@@ -2,12 +2,15 @@ import SwiftUI
 import AppKit
 import TranscriberCore
 import UserNotifications
+import AVFoundation
+
 
 @MainActor
 class AppDelegate: ObservableObject {
-    @Published var selectedFiles: [URL] = []
-    @Published var outputFormat: String = "txt"
+    @Published var selectedFiles: [FileItem] = []
+    @Published var outputFormat: String = "srt"
     @Published var language: String = "en-US"
+    @Published var quality: String = "High"
     @Published var onDevice: Bool = true
     @Published var isTranscribing = false
     @Published var transcriptionResults: [TranscriptionResult] = []
@@ -20,6 +23,7 @@ class AppDelegate: ObservableObject {
     private let speechTranscriber = SpeechTranscriber()
     private let audioExtractor = AudioExtractor()
     private let configManager = ConfigurationManager()
+    private var audioPlayer: AVAudioPlayer?
     
     init() {
         setupNotifications()
@@ -38,7 +42,8 @@ class AppDelegate: ObservableObject {
     private func loadConfiguration() {
         let config = configManager.loadConfiguration(customConfigPath: nil)
         language = config.language ?? "en-US"
-        outputFormat = config.format ?? "txt"
+        outputFormat = config.format ?? "srt"
+        quality = "High"
         onDevice = config.onDevice ?? true
     }
     
@@ -66,7 +71,7 @@ class AppDelegate: ObservableObject {
         ]
         
         if panel.runModal() == .OK {
-            selectedFiles.append(contentsOf: panel.urls)
+            addFiles(panel.urls)
         }
     }
     
@@ -74,8 +79,38 @@ class AppDelegate: ObservableObject {
         selectedFiles.removeAll()
     }
     
-    func removeFile(_ url: URL) {
-        selectedFiles.removeAll { $0 == url }
+    func removeFile(_ fileItem: FileItem) {
+        selectedFiles.removeAll { $0.id == fileItem.id }
+    }
+    
+    func addFiles(_ urls: [URL]) {
+        var newFiles: [FileItem] = []
+        for url in urls {
+            var fileItem = FileItem(url: url)
+            fileItem.duration = getAudioDuration(for: url)
+            newFiles.append(fileItem)
+        }
+        selectedFiles.append(contentsOf: newFiles)
+    }
+    
+    private func getAudioDuration(for url: URL) -> String {
+        let asset = AVAsset(url: url)
+        let duration = asset.duration
+        let seconds = CMTimeGetSeconds(duration)
+        
+        if seconds.isNaN || seconds.isInfinite {
+            return "Unknown"
+        }
+        
+        let hours = Int(seconds) / 3600
+        let minutes = (Int(seconds) % 3600) / 60
+        let secs = Int(seconds) % 60
+        
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            return String(format: "%d:%02d", minutes, secs)
+        }
     }
     
     // MARK: - Transcription
@@ -90,18 +125,25 @@ class AppDelegate: ObservableObject {
             // Request permission first
             try await speechTranscriber.requestPermission()
             
-            for fileURL in selectedFiles {
+            for i in 0..<selectedFiles.count {
+                selectedFiles[i].status = .processing
+                selectedFiles[i].progress = 0.0
+                
                 let result = try await speechTranscriber.transcribeAudioFile(
-                    at: fileURL,
+                    at: selectedFiles[i].url,
                     language: language,
-                    onDevice: onDevice
+                    onDevice: onDevice,
+                    quality: quality
                 )
                 transcriptionResults.append(result)
                 
                 // Save the result to file
                 let outputText = OutputFormatter.format(result, as: OutputFormat(rawValue: outputFormat) ?? .text)
-                let outputURL = fileURL.deletingPathExtension().appendingPathExtension(outputFormat)
+                let outputURL = selectedFiles[i].url.deletingPathExtension().appendingPathExtension(outputFormat)
                 try outputText.write(to: outputURL, atomically: true, encoding: .utf8)
+                
+                selectedFiles[i].status = .done
+                selectedFiles[i].progress = 1.0
             }
             
             isTranscribing = false
@@ -112,6 +154,10 @@ class AppDelegate: ObservableObject {
             
         } catch {
             isTranscribing = false
+            // Mark current file as error
+            if let currentIndex = selectedFiles.firstIndex(where: { $0.status == .processing }) {
+                selectedFiles[currentIndex].status = .error
+            }
             errorMessage = error.localizedDescription
             showingError = true
         }
@@ -156,6 +202,21 @@ class AppDelegate: ObservableObject {
         }
     }
     
+    func playAudio(for fileItem: FileItem) {
+        do {
+            // Stop any currently playing audio
+            audioPlayer?.stop()
+            
+            // Try to create audio player with the file
+            audioPlayer = try AVAudioPlayer(contentsOf: fileItem.url)
+            audioPlayer?.prepareToPlay()
+            audioPlayer?.play()
+        } catch {
+            // If direct playback fails, try opening with system default app
+            NSWorkspace.shared.open(fileItem.url)
+        }
+    }
+    
     // MARK: - Configuration
     
     func updateConfiguration() {
@@ -165,15 +226,15 @@ class AppDelegate: ObservableObject {
     
     // MARK: - Utility
     
-    func getFileIcon(for url: URL) -> String {
-        let pathExtension = url.pathExtension.lowercased()
+    func getFileIcon(for fileItem: FileItem) -> String {
+        let pathExtension = fileItem.url.pathExtension.lowercased()
         switch pathExtension {
         case "wav", "mp3", "m4a", "aac", "flac":
             return "music.note"
         case "mp4", "mov", "avi", "mkv":
-            return "video"
+            return "video.fill"
         default:
-            return "doc"
+            return "doc.fill"
         }
     }
 }
