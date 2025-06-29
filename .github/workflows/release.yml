@@ -24,7 +24,16 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Building version: $VERSION"
+        echo "🏷️  Building version: $VERSION"
+        
+        # Validate version format
+        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "❌ Invalid version format: $VERSION"
+          echo "   Expected format: X.Y.Z (e.g., 2.2.0)"
+          exit 1
+        fi
+        
+        echo "✅ Version format validated: $VERSION"
     
     - name: Check for recent CI artifacts
       id: check-ci
@@ -268,6 +277,23 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Validate job dependencies
+      run: |
+        echo "🔍 Validating job dependency outputs..."
+        echo "   Version: '${{ needs.prepare.outputs.version }}'"
+        echo "   CI artifacts available: '${{ needs.prepare.outputs.ci-artifacts-available }}'"
+        echo "   CI run ID: '${{ needs.prepare.outputs.ci-run-id }}'"
+        echo "   CLI cache key: '${{ needs.build-cli.outputs.cache-key }}'"
+        echo "   App cache key: '${{ needs.build-app.outputs.cache-key }}'"
+        
+        # Validate required outputs
+        if [ -z "${{ needs.prepare.outputs.version }}" ]; then
+          echo "❌ Missing version from prepare job"
+          exit 1
+        fi
+        
+        echo "✅ Job dependencies validated"
+    
     - name: Download CLI artifact
       uses: actions/download-artifact@v4
       with:
@@ -299,6 +325,30 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Validate release prerequisites
+      run: |
+        echo "🔍 Validating release prerequisites..."
+        echo "   Release version: '${{ needs.prepare.outputs.version }}'"
+        
+        # Validate version consistency
+        if [ -z "${{ needs.prepare.outputs.version }}" ]; then
+          echo "❌ Missing version from prepare job"
+          exit 1
+        fi
+        
+        # Validate tag consistency
+        EXPECTED_TAG="v${{ needs.prepare.outputs.version }}"
+        ACTUAL_TAG="${GITHUB_REF#refs/tags/}"
+        if [ "$EXPECTED_TAG" != "$ACTUAL_TAG" ]; then
+          echo "❌ Version mismatch:"
+          echo "   Expected: $EXPECTED_TAG"
+          echo "   Actual: $ACTUAL_TAG"
+          exit 1
+        fi
+        
+        echo "✅ Release prerequisites validated"
+        echo "   Building release for version: ${{ needs.prepare.outputs.version }}"
     
     - name: Download CLI artifact
       uses: actions/download-artifact@v4
