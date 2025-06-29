@@ -264,8 +264,16 @@ if [ -d "$MOUNT_DIR" ]; then
         cp "$BACKGROUND_IMAGE" "$MOUNT_DIR/.background/background.png"
     fi
     
-    # Create .DS_Store with custom view settings using AppleScript
-    osascript << EOF
+    # Detect if we're in a CI environment or headless system
+    if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ] || [ -z "$DISPLAY" ]; then
+        echo "   🤖 CI/headless environment detected - skipping GUI customization"
+        echo "   📦 DMG will use default appearance (still fully functional)"
+    else
+        # Only attempt AppleScript in interactive environments
+        echo "   🎨 Attempting GUI customization..."
+        
+        # Create .DS_Store with custom view settings using AppleScript
+        if osascript << EOF
 tell application "Finder"
     tell disk "$VOLUME_NAME"
         open
@@ -276,13 +284,21 @@ tell application "Finder"
         set theViewOptions to the icon view options of container window
         set arrangement of theViewOptions to not arranged
         set icon size of theViewOptions to 128
-        set background picture of theViewOptions to file ".background:background.png"
         
-        -- Position items
-        set position of item "Transcriber.app" of container window to {150, 200}
-        set position of item "Applications" of container window to {450, 200}
-        set position of item "README.txt" of container window to {150, 350}
-        set position of item "Install CLI Tool.command" of container window to {450, 350}
+        -- Only set background if image exists
+        try
+            if exists file ".background:background.png" then
+                set background picture of theViewOptions to file ".background:background.png"
+            end if
+        end try
+        
+        -- Position items (with error handling)
+        try
+            set position of item "Transcriber.app" of container window to {150, 200}
+            set position of item "Applications" of container window to {450, 200}
+            set position of item "README.txt" of container window to {150, 350}
+            set position of item "Install CLI Tool.command" of container window to {450, 350}
+        end try
         
         close
         open
@@ -292,10 +308,12 @@ tell application "Finder"
     end tell
 end tell
 EOF
-
-    # Alternative method if AppleScript fails
-    if [ $? -ne 0 ]; then
-        echo "   Note: AppleScript customization failed, using basic layout"
+        then
+            echo "   ✅ GUI customization completed successfully"
+        else
+            echo "   ⚠️  GUI customization failed, but DMG creation will continue"
+            echo "   📦 DMG will use default appearance (still fully functional)"
+        fi
     fi
     
     # Ensure proper permissions
