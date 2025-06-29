@@ -406,8 +406,77 @@ EOF
       run: |
         echo "💿 Creating DMG installer with version ${{ needs.prepare.outputs.version }}..."
         make version-debug
-        make dmg
-        echo "✅ DMG installer created"
+        
+        # Create DMG with error handling
+        if ! make dmg; then
+          echo "❌ DMG creation failed"
+          echo "📁 Current releases directory:"
+          ls -la releases/ || echo "   (releases directory not found)"
+          echo "🔧 Attempting to diagnose issue..."
+          make clean
+          exit 1
+        fi
+        
+        # Verify DMG was created
+        EXPECTED_DMG="releases/Transcriber-${{ needs.prepare.outputs.version }}.dmg"
+        if [ ! -f "$EXPECTED_DMG" ]; then
+          echo "❌ DMG file not found at expected location: $EXPECTED_DMG"
+          echo "📁 Available files:"
+          ls -la releases/ || echo "   (releases directory not found)"
+          exit 1
+        fi
+        
+        echo "✅ DMG installer created successfully: $EXPECTED_DMG"
+    
+    - name: Validate release artifacts
+      run: |
+        echo "🔍 Validating release artifacts..."
+        VERSION="${{ needs.prepare.outputs.version }}"
+        
+        # Check for expected files
+        EXPECTED_ZIP="releases/transcriber-$VERSION.zip"
+        EXPECTED_DMG="releases/Transcriber-$VERSION.dmg"
+        
+        echo "📋 Expected artifacts:"
+        echo "   ZIP: $EXPECTED_ZIP"
+        echo "   DMG: $EXPECTED_DMG"
+        
+        # Validate ZIP file
+        if [ ! -f "$EXPECTED_ZIP" ]; then
+          echo "❌ Missing ZIP artifact: $EXPECTED_ZIP"
+          echo "📁 Available files in releases/:"
+          ls -la releases/ || echo "   (releases directory not found)"
+          exit 1
+        else
+          echo "✅ ZIP artifact found: $EXPECTED_ZIP ($(du -sh "$EXPECTED_ZIP" | cut -f1))"
+        fi
+        
+        # Validate DMG file
+        if [ ! -f "$EXPECTED_DMG" ]; then
+          echo "❌ Missing DMG artifact: $EXPECTED_DMG"
+          echo "📁 Available files in releases/:"
+          ls -la releases/ || echo "   (releases directory not found)"
+          exit 1
+        else
+          echo "✅ DMG artifact found: $EXPECTED_DMG ($(du -sh "$EXPECTED_DMG" | cut -f1))"
+        fi
+        
+        # Additional validation: check file sizes are reasonable
+        ZIP_SIZE=$(stat -f%z "$EXPECTED_ZIP" 2>/dev/null || echo "0")
+        DMG_SIZE=$(stat -f%z "$EXPECTED_DMG" 2>/dev/null || echo "0")
+        
+        if [ "$ZIP_SIZE" -lt 100000 ]; then  # Less than 100KB
+          echo "⚠️  ZIP file seems too small: ${ZIP_SIZE} bytes"
+        fi
+        
+        if [ "$DMG_SIZE" -lt 500000 ]; then  # Less than 500KB
+          echo "⚠️  DMG file seems too small: ${DMG_SIZE} bytes"
+        fi
+        
+        echo "📊 Artifact Summary:"
+        echo "   ZIP: $EXPECTED_ZIP - ${ZIP_SIZE} bytes"
+        echo "   DMG: $EXPECTED_DMG - ${DMG_SIZE} bytes"
+        echo "✅ All expected release artifacts validated successfully"
     
     - name: Upload release assets
       uses: actions/upload-artifact@v4

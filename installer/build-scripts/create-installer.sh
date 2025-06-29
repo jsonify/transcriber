@@ -9,8 +9,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 INSTALLER_DIR="$PROJECT_ROOT/installer"
 
-# Get version from VERSION file
-VERSION=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "1.0.1")
+# Get version from environment variable (CI/CD) or VERSION file (local development)
+if [ -n "$RELEASE_VERSION" ]; then
+    VERSION="$RELEASE_VERSION"
+    echo "🏷️  Using RELEASE_VERSION from environment: $VERSION"
+else
+    VERSION=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "1.0.1")
+    echo "📁 Using VERSION from file: $VERSION"
+fi
 
 # Configuration
 PRODUCT_NAME="Transcriber"
