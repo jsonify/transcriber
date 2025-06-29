@@ -291,11 +291,11 @@ EOF
         zip -r "transcriber-$VERSION.zip" "transcriber-$VERSION"
         echo "✅ ZIP archive created"
     
-    - name: Create PKG installer
+    - name: Create DMG installer
       run: |
-        echo "📦 Creating PKG installer..."
-        make installer
-        echo "✅ PKG installer created"
+        echo "💿 Creating DMG installer..."
+        make dmg
+        echo "✅ DMG installer created"
     
     - name: Upload release assets
       uses: actions/upload-artifact@v4
@@ -303,7 +303,7 @@ EOF
         name: release-assets
         path: |
           releases/*.zip
-          releases/*.pkg
+          releases/*.dmg
         retention-days: 1
     
     - name: Create GitHub Release
@@ -311,23 +311,24 @@ EOF
       with:
         files: |
           releases/*.zip
-          releases/*.pkg
+          releases/*.dmg
         name: Release v${{ needs.prepare.outputs.version }}
         body: |
           ## Transcriber v${{ needs.prepare.outputs.version }}
           
           ### 📦 Download & Installation
           
-          **🚀 Recommended: macOS Installer Package**
-          1. Download `Transcriber-${{ needs.prepare.outputs.version }}.pkg`
-          2. Double-click to run the installer
-          3. Follow the installation wizard
-          4. Includes both GUI app and CLI tool with proper permissions
+          **🚀 Recommended: DMG Installer (Best User Experience)**
+          1. Download `Transcriber-${{ needs.prepare.outputs.version }}.dmg`
+          2. Double-click to mount the DMG
+          3. Drag Transcriber.app to Applications folder
+          4. Double-click "Install CLI Tool.command" for terminal access
+          5. Complete installation with beautiful drag-and-drop interface
           
-          **⚡ Quick Install (ZIP):**
+          **⚡ Developer/CLI Only (ZIP):**
           1. Download `transcriber-${{ needs.prepare.outputs.version }}.zip`
           2. Extract the zip file
-          3. Run `./install.sh` to install system-wide
+          3. Run `./install.sh` to install CLI tool system-wide
           
           **🔧 Manual Install:**
           ```bash
@@ -336,19 +337,19 @@ EOF
           
           ### 📋 What's Included
           
-          **📦 macOS Installer (.pkg):**
-          - `Transcriber.app` - Native macOS application with GUI
-          - `transcriber` - CLI tool for automation and scripting
-          - Automatic permissions setup and code signing
-          - Professional installation experience with progress feedback
-          - Silent installation support for enterprise deployment
-          - Built-in uninstaller (`uninstall-transcriber`)
+          **💿 DMG Installer (.dmg) - Complete Solution:**
+          - `Transcriber.app` - Native macOS application with beautiful interface
+          - `Install CLI Tool.command` - Easy CLI installation script  
+          - `README.txt` - Complete installation and usage instructions
+          - `Applications` shortcut - For intuitive drag-and-drop experience
+          - No Gatekeeper warnings with drag-and-drop installation
+          - Both GUI app and CLI tool in one package
           
-          **📁 ZIP Archive (.zip):**
+          **📁 ZIP Archive (.zip) - CLI Tool Only:**
           - `transcriber` - The main CLI binary (signed with Speech Recognition entitlements)
           - `transcriber.entitlements` - Required entitlements file
           - `install.sh` - Automated installation script
-          - `README.md` - Documentation
+          - `README.md` - Documentation and usage guide
           
           ### ✨ Usage
           
@@ -358,13 +359,14 @@ EOF
           transcriber --list-languages
           ```
           
-          ### 🆕 New Installer Features
+          ### 🆕 New DMG Installer Features
           
-          - **Disk Space Validation** - Pre-installation space checks with user-friendly error messages
-          - **Component Selection** - Choose between GUI app and/or CLI tool installation
-          - **Silent Installation** - Enterprise deployment support with `install-silently.sh`
-          - **Enhanced Progress Feedback** - Detailed installation progress with verification
-          - **Automatic Uninstaller** - Clean removal with `sudo uninstall-transcriber`
+          - **Beautiful Interface** - Custom background with organized layout
+          - **Drag-and-Drop Installation** - Familiar macOS installation experience
+          - **Integrated CLI Installer** - One-click CLI tool installation
+          - **No Gatekeeper Warnings** - Better compatibility than traditional installers
+          - **Complete Documentation** - Built-in README with usage instructions
+          - **Self-Contained** - Everything needed in one elegant package
           
           **Requirements:** macOS 13.0+ with Speech Recognition framework
         draft: false
