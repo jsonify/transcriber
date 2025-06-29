@@ -139,9 +139,9 @@ class AppTests: XCTestCase {
     }
     
     func testFileItemStatusTracking() {
-        // Test FileStatus enum cases
-        let statuses: [FileStatus] = [.pending, .processing, .done, .error]
-        XCTAssertEqual(statuses.count, 4)
+        // Test FileStatus enum cases (updated for Issue #45)
+        let statuses: [FileStatus] = [.pending, .queued, .processing, .done, .error, .cancelled]
+        XCTAssertEqual(statuses.count, 6)
         
         // Test status transitions
         let testURL = URL(string: "file:///test-audio.wav")!
@@ -149,6 +149,10 @@ class AppTests: XCTestCase {
         
         // Initial state
         XCTAssertEqual(fileItem.status, .pending)
+        
+        // Simulate queuing
+        fileItem.status = .queued
+        XCTAssertEqual(fileItem.status, .queued)
         
         // Simulate processing
         fileItem.status = .processing
@@ -161,6 +165,16 @@ class AppTests: XCTestCase {
         fileItem.progress = 1.0
         XCTAssertEqual(fileItem.status, .done)
         XCTAssertEqual(fileItem.progress, 1.0)
+        
+        // Test error state
+        fileItem.status = .error
+        fileItem.errorMessage = "Test error"
+        XCTAssertEqual(fileItem.status, .error)
+        XCTAssertEqual(fileItem.errorMessage, "Test error")
+        
+        // Test cancelled state
+        fileItem.status = .cancelled
+        XCTAssertEqual(fileItem.status, .cancelled)
     }
     
     func testFileItemEquality() {
@@ -194,5 +208,172 @@ class AppTests: XCTestCase {
         XCTAssertEqual("High".lowercased(), "high")
         XCTAssertEqual("Medium".lowercased(), "medium")
         XCTAssertEqual("Low".lowercased(), "low")
+    }
+    
+    // MARK: - Issue #45 Tests - Manual Transcription Control
+    
+    func testFileItemEnhancedProperties() {
+        // Test new properties added for Issue #45
+        let testURL = URL(string: "file:///enhanced-test.mp3")!
+        let fileItem = FileItem(
+            url: testURL,
+            status: .processing,
+            duration: "2:30",
+            progress: 0.75,
+            progressMessage: "Processing speech patterns...",
+            errorMessage: nil
+        )
+        
+        XCTAssertEqual(fileItem.url, testURL)
+        XCTAssertEqual(fileItem.status, .processing)
+        XCTAssertEqual(fileItem.duration, "2:30")
+        XCTAssertEqual(fileItem.progress, 0.75)
+        XCTAssertEqual(fileItem.progressMessage, "Processing speech patterns...")
+        XCTAssertNil(fileItem.errorMessage)
+    }
+    
+    func testFileItemControlLogic() {
+        // Test computed properties for UI control logic (Issue #45)
+        let testURL = URL(string: "file:///control-test.wav")!
+        
+        // Test canStart property
+        var fileItem = FileItem(url: testURL, status: .pending)
+        XCTAssertTrue(fileItem.canStart)
+        XCTAssertFalse(fileItem.canCancel)
+        XCTAssertFalse(fileItem.isActive)
+        
+        fileItem.status = .error
+        XCTAssertTrue(fileItem.canStart)
+        XCTAssertFalse(fileItem.canCancel)
+        XCTAssertFalse(fileItem.isActive)
+        
+        fileItem.status = .cancelled
+        XCTAssertTrue(fileItem.canStart)
+        XCTAssertFalse(fileItem.canCancel)
+        XCTAssertFalse(fileItem.isActive)
+        
+        // Test canCancel property
+        fileItem.status = .queued
+        XCTAssertFalse(fileItem.canStart)
+        XCTAssertTrue(fileItem.canCancel)
+        XCTAssertTrue(fileItem.isActive)
+        
+        fileItem.status = .processing
+        XCTAssertFalse(fileItem.canStart)
+        XCTAssertTrue(fileItem.canCancel)
+        XCTAssertTrue(fileItem.isActive)
+        
+        // Test completed states
+        fileItem.status = .done
+        XCTAssertFalse(fileItem.canStart)
+        XCTAssertFalse(fileItem.canCancel)
+        XCTAssertFalse(fileItem.isActive)
+    }
+    
+    func testFileItemNewStatusStates() {
+        // Test new status states added for Issue #45
+        let testURL = URL(string: "file:///status-test.mp4")!
+        var fileItem = FileItem(url: testURL)
+        
+        // Test queued state
+        fileItem.status = .queued
+        fileItem.progressMessage = "Queued for transcription..."
+        XCTAssertEqual(fileItem.status, .queued)
+        XCTAssertEqual(fileItem.progressMessage, "Queued for transcription...")
+        XCTAssertTrue(fileItem.canCancel)
+        XCTAssertFalse(fileItem.canStart)
+        XCTAssertTrue(fileItem.isActive)
+        
+        // Test cancelled state
+        fileItem.status = .cancelled
+        fileItem.progressMessage = ""
+        XCTAssertEqual(fileItem.status, .cancelled)
+        XCTAssertEqual(fileItem.progressMessage, "")
+        XCTAssertFalse(fileItem.canCancel)
+        XCTAssertTrue(fileItem.canStart)
+        XCTAssertFalse(fileItem.isActive)
+        
+        // Test error state with message
+        fileItem.status = .error
+        fileItem.errorMessage = "Speech recognition not available"
+        XCTAssertEqual(fileItem.status, .error)
+        XCTAssertEqual(fileItem.errorMessage, "Speech recognition not available")
+        XCTAssertFalse(fileItem.canCancel)
+        XCTAssertTrue(fileItem.canStart)
+        XCTAssertFalse(fileItem.isActive)
+    }
+    
+    func testFileItemProgressTracking() {
+        // Test enhanced progress tracking for Issue #45
+        let testURL = URL(string: "file:///progress-test.wav")!
+        var fileItem = FileItem(url: testURL)
+        
+        // Test initial state
+        XCTAssertEqual(fileItem.progress, 0.0)
+        XCTAssertEqual(fileItem.progressMessage, "")
+        
+        // Test progress updates during processing
+        fileItem.status = .processing
+        fileItem.progress = 0.25
+        fileItem.progressMessage = "Analyzing audio format..."
+        
+        XCTAssertEqual(fileItem.progress, 0.25)
+        XCTAssertEqual(fileItem.progressMessage, "Analyzing audio format...")
+        
+        // Test mid-progress
+        fileItem.progress = 0.6
+        fileItem.progressMessage = "Processing speech patterns..."
+        
+        XCTAssertEqual(fileItem.progress, 0.6)
+        XCTAssertEqual(fileItem.progressMessage, "Processing speech patterns...")
+        
+        // Test completion
+        fileItem.status = .done
+        fileItem.progress = 1.0
+        fileItem.progressMessage = "Complete!"
+        
+        XCTAssertEqual(fileItem.status, .done)
+        XCTAssertEqual(fileItem.progress, 1.0)
+        XCTAssertEqual(fileItem.progressMessage, "Complete!")
+    }
+    
+    func testFileItemInitializationVariants() {
+        // Test different initialization patterns for Issue #45
+        let testURL = URL(string: "file:///init-test.mp3")!
+        
+        // Test minimal initialization
+        let basicItem = FileItem(url: testURL)
+        XCTAssertEqual(basicItem.status, .pending)
+        XCTAssertEqual(basicItem.progress, 0.0)
+        XCTAssertEqual(basicItem.progressMessage, "")
+        XCTAssertNil(basicItem.errorMessage)
+        
+        // Test full initialization
+        let fullItem = FileItem(
+            url: testURL,
+            status: .processing,
+            duration: "1:45:30",
+            progress: 0.85,
+            progressMessage: "Finalizing results...",
+            errorMessage: nil
+        )
+        
+        XCTAssertEqual(fullItem.status, .processing)
+        XCTAssertEqual(fullItem.duration, "1:45:30")
+        XCTAssertEqual(fullItem.progress, 0.85)
+        XCTAssertEqual(fullItem.progressMessage, "Finalizing results...")
+        XCTAssertNil(fullItem.errorMessage)
+        
+        // Test error initialization
+        let errorItem = FileItem(
+            url: testURL,
+            status: .error,
+            errorMessage: "File format not supported"
+        )
+        
+        XCTAssertEqual(errorItem.status, .error)
+        XCTAssertEqual(errorItem.errorMessage, "File format not supported")
+        XCTAssertTrue(errorItem.canStart) // Can retry after error
+        XCTAssertFalse(errorItem.canCancel)
     }
 }
