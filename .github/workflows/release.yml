@@ -425,7 +425,7 @@ jobs:
         
         echo "✅ Both binaries found, creating DMG..."
         
-        # Create DMG directly via script (skip make dependencies that rebuild)
+        # Create DMG directly via script (avoids make dependencies that rebuild)
         if ! ./installer/build-scripts/create-dmg.sh; then
           echo "❌ DMG creation failed"
           echo "📁 Current releases directory:"
