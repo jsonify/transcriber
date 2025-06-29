@@ -407,8 +407,26 @@ jobs:
         echo "💿 Creating DMG installer with version ${{ needs.prepare.outputs.version }}..."
         make version-debug
         
-        # Create DMG with error handling
-        if ! make dmg; then
+        # Verify binaries are in place before DMG creation
+        echo "🔍 Verifying binaries before DMG creation..."
+        if [ ! -f ".build/release/transcriber" ]; then
+          echo "❌ CLI binary not found at .build/release/transcriber"
+          echo "📁 Contents of .build/release/:"
+          ls -la .build/release/ || echo "   (.build/release directory not found)"
+          exit 1
+        fi
+        
+        if [ ! -f ".build/release/TranscriberApp" ]; then
+          echo "❌ App binary not found at .build/release/TranscriberApp" 
+          echo "📁 Contents of .build/release/:"
+          ls -la .build/release/ || echo "   (.build/release directory not found)"
+          exit 1
+        fi
+        
+        echo "✅ Both binaries found, creating DMG..."
+        
+        # Create DMG directly via script (skip make dependencies that rebuild)
+        if ! ./installer/build-scripts/create-dmg.sh; then
           echo "❌ DMG creation failed"
           echo "📁 Current releases directory:"
           ls -la releases/ || echo "   (releases directory not found)"
