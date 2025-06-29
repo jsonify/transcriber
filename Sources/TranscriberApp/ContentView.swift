@@ -193,6 +193,14 @@ struct ContentView: View {
                                             },
                                             onDelete: {
                                                 appDelegate.removeFile(fileItem)
+                                            },
+                                            onStartTranscription: {
+                                                Task {
+                                                    await appDelegate.startTranscription(for: fileItem)
+                                                }
+                                            },
+                                            onCancelTranscription: {
+                                                appDelegate.cancelTranscription(for: fileItem)
                                             }
                                         )
                                         
