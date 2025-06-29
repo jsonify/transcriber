@@ -37,10 +37,12 @@ public struct TranscriptionResult {
 
 // File management types for UI
 public enum FileStatus: Equatable {
-    case pending
-    case processing
-    case done
-    case error
+    case pending     // File added, not started
+    case queued      // File queued for transcription
+    case processing  // Currently transcribing
+    case done        // Successfully completed
+    case error       // Failed with error
+    case cancelled   // User cancelled transcription
 }
 
 public struct FileItem: Identifiable, Equatable {
@@ -49,12 +51,29 @@ public struct FileItem: Identifiable, Equatable {
     public var status: FileStatus = .pending
     public var duration: String = ""
     public var progress: Double = 0.0
+    public var progressMessage: String = ""
+    public var errorMessage: String?
     
-    public init(url: URL, status: FileStatus = .pending, duration: String = "", progress: Double = 0.0) {
+    public init(url: URL, status: FileStatus = .pending, duration: String = "", progress: Double = 0.0, progressMessage: String = "", errorMessage: String? = nil) {
         self.url = url
         self.status = status
         self.duration = duration
         self.progress = progress
+        self.progressMessage = progressMessage
+        self.errorMessage = errorMessage
+    }
+    
+    // Computed properties for UI logic
+    public var canStart: Bool {
+        return status == .pending || status == .error || status == .cancelled
+    }
+    
+    public var canCancel: Bool {
+        return status == .queued || status == .processing
+    }
+    
+    public var isActive: Bool {
+        return status == .queued || status == .processing
     }
     
     public static func == (lhs: FileItem, rhs: FileItem) -> Bool {

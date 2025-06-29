@@ -5,6 +5,8 @@ struct FileListItemView: View {
     let fileItem: FileItem
     let onPlay: () -> Void
     let onDelete: () -> Void
+    let onStartTranscription: () -> Void
+    let onCancelTranscription: () -> Void
     
     var body: some View {
         HStack(spacing: 12) {
@@ -26,32 +28,77 @@ struct FileListItemView: View {
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                     
-                    if fileItem.status == .processing {
-                        Text("Processing")
-                            .font(.system(size: 11))
-                            .foregroundColor(.blue)
-                    } else if fileItem.status == .done {
+                    // Enhanced status indicators
+                    switch fileItem.status {
+                    case .pending:
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray)
+                            Text("Ready to start")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                        }
+                    case .queued:
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.orange)
+                            Text("Queued")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                        }
+                    case .processing:
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue)
+                                Text("Processing \(Int(fileItem.progress * 100))%")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.blue)
+                            }
+                            if !fileItem.progressMessage.isEmpty {
+                                Text(fileItem.progressMessage)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue.opacity(0.8))
+                            }
+                        }
+                    case .done:
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(.green)
-                            Text("Done")
+                            Text("Complete")
                                 .font(.system(size: 11))
                                 .foregroundColor(.green)
                         }
-                    } else if fileItem.status == .error {
-                        HStack(spacing: 4) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.red)
-                            Text("Error")
-                                .font(.system(size: 11))
-                                .foregroundColor(.red)
+                    case .error:
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                                Text("Error")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.red)
+                            }
+                            if let errorMessage = fileItem.errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red.opacity(0.8))
+                                    .lineLimit(1)
+                            }
                         }
-                    } else {
-                        Text("Pending")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                    case .cancelled:
+                        HStack(spacing: 4) {
+                            Image(systemName: "stop.circle")
+                                .font(.system(size: 10))
+                                .foregroundColor(.orange)
+                            Text("Cancelled")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                        }
                     }
                 }
             }
@@ -60,16 +107,53 @@ struct FileListItemView: View {
             
             // Action buttons
             HStack(spacing: 8) {
-                // Play button
-                Button(action: onPlay) {
-                    Image(systemName: "play.circle")
-                        .font(.system(size: 18))
+                // Primary action button (context-aware)
+                switch fileItem.status {
+                case .pending, .error, .cancelled:
+                    // Start Transcription button
+                    Button(action: onStartTranscription) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "waveform.circle")
+                                .font(.system(size: 16))
+                            Text("Start")
+                                .font(.system(size: 12, weight: .medium))
+                        }
                         .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    
+                case .queued, .processing:
+                    // Cancel button
+                    Button(action: onCancelTranscription) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "stop.circle")
+                                .font(.system(size: 16))
+                            Text("Cancel")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    
+                case .done:
+                    // Play button for completed files
+                    Button(action: onPlay) {
+                        Image(systemName: "play.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .disabled(fileItem.status == .processing)
                 
-                // Delete button
+                // Delete button (always available except when processing)
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .font(.system(size: 16))
@@ -82,15 +166,33 @@ struct FileListItemView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background {
-            if fileItem.status == .processing {
+            // Enhanced progress indicator
+            switch fileItem.status {
+            case .queued:
+                // Subtle queued indicator
+                Rectangle()
+                    .fill(Color.orange.opacity(0.1))
+            case .processing:
+                // Animated progress bar
                 GeometryReader { geometry in
                     HStack {
                         Rectangle()
                             .fill(Color.blue.opacity(0.3))
                             .frame(width: geometry.size.width * fileItem.progress)
+                            .animation(.easeInOut(duration: 0.3), value: fileItem.progress)
                         Spacer()
                     }
                 }
+            case .done:
+                // Success indicator
+                Rectangle()
+                    .fill(Color.green.opacity(0.1))
+            case .error:
+                // Error indicator
+                Rectangle()
+                    .fill(Color.red.opacity(0.1))
+            default:
+                EmptyView()
             }
         }
     }
@@ -115,7 +217,9 @@ struct FileListItemView_Previews: PreviewProvider {
             FileListItemView(
                 fileItem: FileItem(url: URL(string: "file:///meeting-recording.mp4")!),
                 onPlay: {},
-                onDelete: {}
+                onDelete: {},
+                onStartTranscription: {},
+                onCancelTranscription: {}
             )
             .background(Color.black)
             
@@ -124,10 +228,13 @@ struct FileListItemView_Previews: PreviewProvider {
                     var item = FileItem(url: URL(string: "file:///interview-audio.wav")!)
                     item.status = .processing
                     item.progress = 0.6
+                    item.progressMessage = "Processing speech patterns..."
                     return item
                 }(),
                 onPlay: {},
-                onDelete: {}
+                onDelete: {},
+                onStartTranscription: {},
+                onCancelTranscription: {}
             )
             .background(Color.black)
             
@@ -139,7 +246,39 @@ struct FileListItemView_Previews: PreviewProvider {
                     return item
                 }(),
                 onPlay: {},
-                onDelete: {}
+                onDelete: {},
+                onStartTranscription: {},
+                onCancelTranscription: {}
+            )
+            .background(Color.black)
+            
+            // Additional preview for new states
+            FileListItemView(
+                fileItem: {
+                    var item = FileItem(url: URL(string: "file:///queued-file.mp3")!)
+                    item.status = .queued
+                    item.duration = "0:45:30"
+                    return item
+                }(),
+                onPlay: {},
+                onDelete: {},
+                onStartTranscription: {},
+                onCancelTranscription: {}
+            )
+            .background(Color.black)
+            
+            FileListItemView(
+                fileItem: {
+                    var item = FileItem(url: URL(string: "file:///error-file.wav")!)
+                    item.status = .error
+                    item.duration = "0:23:15"
+                    item.errorMessage = "Speech recognition not available"
+                    return item
+                }(),
+                onPlay: {},
+                onDelete: {},
+                onStartTranscription: {},
+                onCancelTranscription: {}
             )
             .background(Color.black)
         }
