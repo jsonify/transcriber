@@ -466,6 +466,8 @@ jobs:
         
         mkdir -p "$ARCHIVE_DIR"
         cp .build/release/transcriber "$ARCHIVE_DIR/"
+        # Ensure executable permissions are preserved
+        chmod +x "$ARCHIVE_DIR/transcriber"
         cp transcriber.entitlements "$ARCHIVE_DIR/"
         cp README.md "$ARCHIVE_DIR/"
         
@@ -492,6 +494,8 @@ jobs:
         
         mkdir -p "$ARCHIVE_DIR"
         cp artifacts/cli-intel/transcriber-intel-signed "$ARCHIVE_DIR/transcriber"
+        # Ensure executable permissions are preserved
+        chmod +x "$ARCHIVE_DIR/transcriber"
         cp transcriber.entitlements "$ARCHIVE_DIR/"
         cp README.md "$ARCHIVE_DIR/"
         
