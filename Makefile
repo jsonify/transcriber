@@ -351,7 +351,8 @@ archive-cli: verify
 	mkdir -p "$(ARCHIVE_DIR)"
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
-	cp "$$BINARY_PATH" "$(ARCHIVE_BINARY)"
+	cp "$$BINARY_PATH" "$(ARCHIVE_BINARY)"; \
+	chmod +x "$(ARCHIVE_BINARY)"
 	cp README.md "$(ARCHIVE_DIR)/"
 	cp transcriber.entitlements "$(ARCHIVE_DIR)/"
 
@@ -361,7 +362,8 @@ archive-app: sign-app
 	mkdir -p "$(ARCHIVE_DIR)"
 	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
 	BINARY_PATH="$$BIN_PATH/$(APP_NAME)"; \
-	cp "$$BINARY_PATH" "$(ARCHIVE_DIR)/$(APP_NAME)"
+	cp "$$BINARY_PATH" "$(ARCHIVE_DIR)/$(APP_NAME)"; \
+	chmod +x "$(ARCHIVE_DIR)/$(APP_NAME)"
 	@echo "#!/bin/bash" > "$(ARCHIVE_DIR)/install.sh"
 	@echo "# Install script for $(PROGRAM_NAME) v$(VERSION)" >> "$(ARCHIVE_DIR)/install.sh"
 	@echo "set -e" >> "$(ARCHIVE_DIR)/install.sh"
