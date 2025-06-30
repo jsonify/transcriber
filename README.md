@@ -34,6 +34,15 @@ xattr -d com.apple.quarantine /Applications/Transcriber.app
 - Click "Open" when macOS warns about unidentified developer
 - The app will then launch normally in future
 
+### ⚠️ Important Installation Notes
+
+**Always use the proper app bundle**: The app must be installed as `Transcriber.app` (an app bundle) in `/Applications/`, not as a raw executable file.
+
+- ✅ **Correct**: `/Applications/Transcriber.app/` 
+- ❌ **Incorrect**: `/Applications/transcriber` (raw executable)
+
+If you accidentally install a raw executable file, it will open as a text document instead of launching the application. Use the DMG installer to ensure proper installation.
+
 ### Build from Source
 
 ```bash
