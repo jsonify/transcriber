@@ -270,9 +270,75 @@ jobs:
           transcriber.entitlements
         retention-days: 1
 
+  build-cli-intel:
+    runs-on: macos-latest
+    needs: prepare
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Generate cache key
+      id: cache-key
+      run: |
+        KEY="cli-intel-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('Sources/TranscriberCLI/**', 'Sources/TranscriberCore/**', 'Package.swift') }}"
+        echo "key=$KEY" >> $GITHUB_OUTPUT
+    
+    - name: Cache Intel CLI binary
+      id: cache-cli-intel
+      uses: actions/cache@v4
+      with:
+        path: |
+          .build/release/transcriber-intel
+          transcriber-intel-signed
+        key: ${{ steps.cache-key.outputs.key }}
+    
+    - name: Cache Swift packages
+      if: steps.cache-cli-intel.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-swift-
+    
+    - name: Build Intel CLI (if not cached)
+      if: steps.cache-cli-intel.outputs.cache-hit != 'true'
+      env:
+        RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      run: |
+        echo "🏷️  Building Intel CLI with version: ${{ needs.prepare.outputs.version }}"
+        make version-debug
+        echo "🔨 Building Intel CLI from source..."
+        make build-release-cli-intel
+        # Sign with ad-hoc signature
+        codesign --force --sign - --entitlements transcriber.entitlements .build/release/transcriber-intel
+        cp .build/release/transcriber-intel transcriber-intel-signed
+    
+    - name: Test Intel CLI binary
+      run: |
+        if [ -f "transcriber-intel-signed" ]; then
+          file transcriber-intel-signed
+          echo "✅ Intel CLI binary architecture verified"
+          otool -l transcriber-intel-signed | grep -A5 LC_CODE_SIGNATURE || echo "No code signature found"
+        else
+          echo "❌ Intel CLI binary not found"
+          exit 1
+        fi
+    
+    - name: Upload Intel CLI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: transcriber-cli-intel
+        path: |
+          transcriber-intel-signed
+          transcriber.entitlements
+        retention-days: 1
+
   test-release:
     runs-on: macos-latest
-    needs: [prepare, build-cli, build-app]
+    needs: [prepare, build-cli, build-app, build-cli-intel]
     
     steps:
     - uses: actions/checkout@v4
@@ -306,12 +372,24 @@ jobs:
         name: transcriber-app
         path: artifacts/app
     
+    - name: Download Intel CLI artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: transcriber-cli-intel
+        path: artifacts/cli-intel
+    
     - name: Test release binaries
       run: |
         echo "🧪 Testing CLI binary..."
         chmod +x artifacts/cli/transcriber-signed
         artifacts/cli/transcriber-signed --version
         artifacts/cli/transcriber-signed --help > /dev/null
+        
+        echo "🧪 Testing Intel CLI binary..."
+        chmod +x artifacts/cli-intel/transcriber-intel-signed
+        file artifacts/cli-intel/transcriber-intel-signed
+        artifacts/cli-intel/transcriber-intel-signed --version
+        artifacts/cli-intel/transcriber-intel-signed --help > /dev/null
         
         echo "🧪 Testing App binary..."
         chmod +x artifacts/app/TranscriberApp-signed
@@ -321,7 +399,7 @@ jobs:
 
   create-assets:
     runs-on: macos-latest
-    needs: [prepare, build-cli, build-app, test-release]
+    needs: [prepare, build-cli, build-app, build-cli-intel, test-release]
     
     steps:
     - uses: actions/checkout@v4
@@ -362,6 +440,12 @@ jobs:
         name: transcriber-app
         path: artifacts/app
     
+    - name: Download Intel CLI artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: transcriber-cli-intel
+        path: artifacts/cli-intel
+    
     - name: Setup release directory
       run: |
         mkdir -p releases
@@ -399,6 +483,55 @@ jobs:
         cd releases
         zip -r "transcriber-$VERSION.zip" "transcriber-$VERSION"
         echo "✅ ZIP archive created"
+    
+    - name: Create Intel-only ZIP archive
+      run: |
+        echo "📦 Creating Intel-only ZIP archive..."
+        VERSION="${{ needs.prepare.outputs.version }}"
+        ARCHIVE_DIR="releases/transcriber-$VERSION-intel"
+        
+        mkdir -p "$ARCHIVE_DIR"
+        cp artifacts/cli-intel/transcriber-intel-signed "$ARCHIVE_DIR/transcriber"
+        cp transcriber.entitlements "$ARCHIVE_DIR/"
+        cp README.md "$ARCHIVE_DIR/"
+        
+        # Create install script
+        cat > "$ARCHIVE_DIR/install.sh" << 'EOF'
+        #!/bin/bash
+        set -e
+        echo "Installing Transcriber (Intel-only)..."
+        sudo cp transcriber /usr/local/bin/
+        echo "✅ Transcriber (Intel-only) installed to /usr/local/bin/"
+        echo "Run 'transcriber --help' to get started"
+        EOF
+        chmod +x "$ARCHIVE_DIR/install.sh"
+        
+        # Add Intel-specific readme
+        cat > "$ARCHIVE_DIR/README-INTEL.md" << 'EOF'
+        # Transcriber Intel-Only Build
+        
+        This is an Intel x86_64-only build of Transcriber CLI for older Mac systems.
+        
+        ## Installation
+        
+        1. Run the install script: `./install.sh`
+        2. Or manually copy: `sudo cp transcriber /usr/local/bin/`
+        
+        ## Gatekeeper Bypass
+        
+        Since this uses ad-hoc signing, you may need to bypass Gatekeeper:
+        
+        ```bash
+        # One-time bypass
+        xattr -d com.apple.quarantine transcriber
+        ```
+        
+        Or right-click → Open when first running.
+        EOF
+        
+        cd releases
+        zip -r "transcriber-$VERSION-intel.zip" "transcriber-$VERSION-intel"
+        echo "✅ Intel-only ZIP archive created"
     
     - name: Create DMG installer
       env:
@@ -453,10 +586,12 @@ jobs:
         
         # Check for expected files
         EXPECTED_ZIP="releases/transcriber-$VERSION.zip"
+        EXPECTED_INTEL_ZIP="releases/transcriber-$VERSION-intel.zip"
         EXPECTED_DMG="releases/Transcriber-$VERSION.dmg"
         
         echo "📋 Expected artifacts:"
         echo "   ZIP: $EXPECTED_ZIP"
+        echo "   Intel ZIP: $EXPECTED_INTEL_ZIP"
         echo "   DMG: $EXPECTED_DMG"
         
         # Validate ZIP file
@@ -467,6 +602,16 @@ jobs:
           exit 1
         else
           echo "✅ ZIP artifact found: $EXPECTED_ZIP ($(du -sh "$EXPECTED_ZIP" | cut -f1))"
+        fi
+        
+        # Validate Intel ZIP file
+        if [ ! -f "$EXPECTED_INTEL_ZIP" ]; then
+          echo "❌ Missing Intel ZIP artifact: $EXPECTED_INTEL_ZIP"
+          echo "📁 Available files in releases/:"
+          ls -la releases/ || echo "   (releases directory not found)"
+          exit 1
+        else
+          echo "✅ Intel ZIP artifact found: $EXPECTED_INTEL_ZIP ($(du -sh "$EXPECTED_INTEL_ZIP" | cut -f1))"
         fi
         
         # Validate DMG file
@@ -481,10 +626,15 @@ jobs:
         
         # Additional validation: check file sizes are reasonable
         ZIP_SIZE=$(stat -f%z "$EXPECTED_ZIP" 2>/dev/null || echo "0")
+        INTEL_ZIP_SIZE=$(stat -f%z "$EXPECTED_INTEL_ZIP" 2>/dev/null || echo "0")
         DMG_SIZE=$(stat -f%z "$EXPECTED_DMG" 2>/dev/null || echo "0")
         
         if [ "$ZIP_SIZE" -lt 100000 ]; then  # Less than 100KB
           echo "⚠️  ZIP file seems too small: ${ZIP_SIZE} bytes"
+        fi
+        
+        if [ "$INTEL_ZIP_SIZE" -lt 100000 ]; then  # Less than 100KB
+          echo "⚠️  Intel ZIP file seems too small: ${INTEL_ZIP_SIZE} bytes"
         fi
         
         if [ "$DMG_SIZE" -lt 500000 ]; then  # Less than 500KB
@@ -493,6 +643,7 @@ jobs:
         
         echo "📊 Artifact Summary:"
         echo "   ZIP: $EXPECTED_ZIP - ${ZIP_SIZE} bytes"
+        echo "   Intel ZIP: $EXPECTED_INTEL_ZIP - ${INTEL_ZIP_SIZE} bytes"
         echo "   DMG: $EXPECTED_DMG - ${DMG_SIZE} bytes"
         echo "✅ All expected release artifacts validated successfully"
     
@@ -529,6 +680,12 @@ jobs:
           2. Extract the zip file
           3. Run `./install.sh` to install CLI tool system-wide
           
+          **💻 Intel Mac Only (ZIP):**
+          1. Download `transcriber-${{ needs.prepare.outputs.version }}-intel.zip`
+          2. Extract the zip file
+          3. Run `./install.sh` to install CLI tool system-wide
+          4. For Gatekeeper: Right-click → Open when first running
+          
           **🔧 Manual Install:**
           ```bash
           sudo cp transcriber /usr/local/bin/
@@ -549,6 +706,13 @@ jobs:
           - `transcriber.entitlements` - Required entitlements file
           - `install.sh` - Automated installation script
           - `README.md` - Documentation and usage guide
+          
+          **💻 Intel ZIP Archive (-intel.zip) - Intel Mac Only:**
+          - `transcriber` - Intel x86_64-only CLI binary (ad-hoc signed)
+          - `transcriber.entitlements` - Required entitlements file
+          - `install.sh` - Automated installation script
+          - `README.md` - General documentation
+          - `README-INTEL.md` - Intel-specific installation notes
           
           ### ✨ Usage
           
