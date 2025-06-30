@@ -134,6 +134,44 @@ build-release-cli:
 	fi; \
 	echo "✅ CLI universal binary build complete at $$BINARY_PATH"
 
+.PHONY: build-release-cli-intel
+build-release-cli-intel:
+	@echo "📦 Building $(PROGRAM_NAME) CLI v$(VERSION) Intel-only binary (release)..."
+	@# Clean build cache to avoid conflicts between architecture builds
+	swift package clean
+	@echo "   🏗️  Building for x86_64 (Intel)..."
+	swift build $(SWIFT_BUILD_FLAGS) --arch x86_64 --product $(PROGRAM_NAME)
+	@# Copy Intel binary to release location
+	mkdir -p .build/release
+	cp .build/x86_64-apple-macosx/release/$(PROGRAM_NAME) .build/release/$(PROGRAM_NAME)-intel
+	@echo "   🔍 Verifying Intel-only binary..."
+	file .build/release/$(PROGRAM_NAME)-intel
+	@BIN_PATH=$$(swift build $(SWIFT_BUILD_FLAGS) --show-bin-path); \
+	BINARY_PATH="$$BIN_PATH/$(PROGRAM_NAME)"; \
+	if [ ! -f ".build/release/$(PROGRAM_NAME)-intel" ]; then \
+		echo "❌ Intel CLI build failed - binary not found"; \
+		exit 1; \
+	fi; \
+	echo "✅ CLI Intel-only binary build complete at .build/release/$(PROGRAM_NAME)-intel"
+
+.PHONY: build-release-app-intel  
+build-release-app-intel:
+	@echo "📱 Building $(APP_NAME) v$(VERSION) Intel-only binary (release)..."
+	@# Clean build cache to avoid conflicts between architecture builds
+	swift package clean
+	@echo "   🏗️  Building for x86_64 (Intel)..."
+	swift build $(SWIFT_BUILD_FLAGS) --arch x86_64 --product $(APP_NAME)
+	@# Copy Intel binary to release location
+	mkdir -p .build/release
+	cp .build/x86_64-apple-macosx/release/$(APP_NAME) .build/release/$(APP_NAME)-intel
+	@echo "   🔍 Verifying Intel-only binary..."
+	file .build/release/$(APP_NAME)-intel
+	@if [ ! -f ".build/release/$(APP_NAME)-intel" ]; then \
+		echo "❌ Intel App build failed - binary not found"; \
+		exit 1; \
+	fi; \
+	echo "✅ App Intel-only binary build complete at .build/release/$(APP_NAME)-intel"
+
 .PHONY: build-release-app
 build-release-app:
 	@echo "📱 Building $(APP_NAME) v$(VERSION) universal binary (release)..."
@@ -452,6 +490,8 @@ info:
 	@echo "   make release     - Full release build (both CLI and App)"
 	@echo "   make release-cli - Release build CLI only"
 	@echo "   make release-app - Release build App only"
+	@echo "   make build-release-cli-intel  - Build Intel-only CLI"
+	@echo "   make build-release-app-intel  - Build Intel-only App"
 	@echo "   make installer   - Create macOS installer package (.pkg)"
 	@echo "   make installer-production - Create signed installer (requires .env)"
 	@echo "   make install     - Install CLI to /usr/local/bin"
